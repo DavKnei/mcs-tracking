@@ -85,8 +85,8 @@ def save_detection_plot(lon, lat, prec, final_labeled_regions, file_time, output
         print(f"No MCS regions detected at time {file_time}. Skipping plot.")
         return
 
-    mcs_lat = lat.values[mcs_indices]
-    mcs_lon = lon.values[mcs_indices]
+    mcs_lat = lat[mcs_indices]
+    mcs_lon = lon[mcs_indices]
     mcs_prec_values = prec[mcs_indices]
     mcs_region_labels = final_labeled_regions[mcs_indices]
 
@@ -124,3 +124,61 @@ def save_detection_plot(lon, lat, prec, final_labeled_regions, file_time, output
     plt.close(fig)  # Close the figure to free memory
 
     print(f"Saved plot for time {file_time} to {output_filepath}")
+
+    
+def save_intermediate_plots(detection_result, output_dir):
+    lon = detection_result['lon']
+    lat = detection_result['lat']
+    precipitation = detection_result['precipitation']
+    final_labeled_regions = detection_result['final_labeled_regions']
+    moderate_prec_clusters = detection_result['moderate_prec_clusters']
+    convective_plumes = detection_result['convective_plumes']
+    file_time = detection_result['time']
+    file_time_str = np.datetime_as_string(file_time, unit='h')
+
+    # Plot precipitation field
+    # Create a figure and axes with Cartopy projection
+    fig, ax = plt.subplots(figsize=(12, 8), subplot_kw={"projection": ccrs.PlateCarree()})
+
+    # Set the extent of the map (adjust as necessary)
+    ax.set_extent([lon.min(), lon.max(), lat.min(), lat.max()], crs=ccrs.PlateCarree())
+
+    # Add map features
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
+    ax.add_feature(cfeature.BORDERS, linestyle=":", linewidth=0.5)
+    ax.add_feature(cfeature.OCEAN, facecolor="lightblue")
+
+    # Plot precipitation data
+    plot_precipitation(ax, lon, lat, precipitation, min_prec_threshold=0.1)
+    ax.set_title(f'Precipitation in mm at {file_time_str}')
+    plt.savefig(f"{output_dir}/precipitation_{file_time_str}.png", dpi=300)
+    plt.close(fig)
+
+    # Plot moderate prec clusters
+    fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': ccrs.PlateCarree()})
+    ax.coastlines()
+    clusters_plot = ax.pcolormesh(lon, lat, moderate_prec_clusters, cmap='tab20', shading='auto')
+    plt.colorbar(clusters_plot, ax=ax, label='Cluster Label')
+    ax.set_title(f'Moderate prec Clusters at {file_time_str}')
+    plt.savefig(f"{output_dir}/moderate_clusters_{file_time_str}.png", dpi=300)
+    plt.close(fig)
+
+
+    # Final labeled precipitation clusters
+    fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': ccrs.PlateCarree()})
+    ax.coastlines()
+    clusters_plot = ax.pcolormesh(lon, lat, final_labeled_regions, cmap='tab20', shading='auto')
+    plt.colorbar(clusters_plot, ax=ax, label='Cluster Label')
+    ax.set_title(f'MCS Clusters at {file_time_str}')
+    plt.savefig(f"{output_dir}/MCS_clusters_{file_time_str}.png", dpi=300)
+    plt.close(fig)
+
+    # Plot convective plumes
+    fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': ccrs.PlateCarree()})
+    ax.coastlines()
+    plumes_plot = ax.pcolormesh(lon, lat, convective_plumes, cmap='tab20', shading='auto')
+    plt.colorbar(plumes_plot, ax=ax, label='Convective Plume Label')
+    ax.set_title(f'Convective Plumes at {file_time_str}')
+    plt.savefig(f"{output_dir}/convective_plumes_{file_time_str}.png", dpi=300)
+    plt.close(fig)
+
