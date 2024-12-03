@@ -1,0 +1,38 @@
+# -*- mode: gitignore -*-
+
+## emacs temporary files
+*~
+\#*\#
+.\#*
+
+## Core latex/pdflatex auxiliary files:
+*.aux
+*.acn
+*.acr
+*.alg
+*-blx.bib
+*.bbl
+*.bcf
+*.blg
+*.ist
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.run.xml
+*.fmt
+*.fot
+*.cb
+*.cb2
+*.fdb_latexmk
+*.synctex(busy)
+
+## All netCDF datafiles if the end with .nc
+*.nc
+
+## vscode
+.vscode/
+.cache/
+__pycache__/
