@@ -36,6 +36,23 @@ def identify_moderate_precipitation(prec, moderate_prec_threshold):
     moderate_prec_mask = prec >= moderate_prec_threshold
     return moderate_prec_mask
 
+def identify_moderate_precip_clusters(precipitation, threshold):
+    """
+    Identify clusters of moderate precipitation.
+
+    Parameters:
+    - precipitation: 2D array of precipitation values.
+    - threshold: Moderate precipitation threshold.
+
+    Returns:
+    - labeled_clusters: 2D array of cluster labels.
+    - num_clusters: Total number of clusters identified.
+    """
+    moderate_mask = precipitation >= threshold
+    structure = np.ones((3, 3))  # 8-connectivity
+    labeled_clusters, num_clusters = label(moderate_mask, structure=structure)
+    return labeled_clusters, num_clusters
+
 def cluster_moderate_precipitation(moderate_prec_mask, lat, lon, eps_km, min_samples):
     """
     Use DBSCAN to cluster moderate precipitation grid points.
@@ -260,6 +277,9 @@ def detect_mcs_in_file_new(file_path, time_index=0):
     precipitation_smooth = apply_smoothing(precipitation, method='gaussian', sigma=1)
     precipitation_to_use = precipitation_smooth
 
+    #Identify moderate precipitation clusters TEST
+    labeled_clusters, num_clusters = identify_moderate_precip_clusters(precipitation_to_use, threshold=2)
+    
     # Identify moderate precipitation points
     moderate_prec_mask = identify_moderate_precipitation(precipitation_to_use, moderate_prec_threshold=2)
 
