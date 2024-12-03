@@ -25,18 +25,29 @@ def main():
     # List to hold detection results
     detection_results = []
 
-    # Specify the number of cores
-    NUMBER_OF_CORES = 24  # 40 available on wegc_comp
+    USE_MULTIPROCESSING = False
+
+    if USE_MULTIPROCESSING:
+        # Specify the number of cores
+        NUMBER_OF_CORES = 1  # 40 available on wegc_comp
 
 
-    # Use ProcessPoolExecutor for CPU-bound tasks
-    with concurrent.futures.ProcessPoolExecutor(max_workers=NUMBER_OF_CORES) as executor:
-        # Map the files to the process_file function
-        futures = [executor.submit(process_file, file_path) for file_path in file_list]
-        for future in concurrent.futures.as_completed(futures):
-            print(f'MCS detection in {process_file}...')
-            detection_results.append(future.result())
+        # Use ProcessPoolExecutor for CPU-bound tasks
+        with concurrent.futures.ProcessPoolExecutor(max_workers=NUMBER_OF_CORES) as executor:
+            # Map the files to the process_file function
+            futures = [executor.submit(process_file, file_path) for file_path in file_list]
+            for future in concurrent.futures.as_completed(futures):
+                print(f'MCS detection in {process_file}...')
+                detection_results.append(future.result())
             
+        pass
+    else:
+        # Process files sequentially for debugging
+        for file_path in file_list:
+            result = detect_mcs_in_file_new(file_path)
+            detection_results.append(result)
+
+        pass
 
     # Sort detection results by time to ensure correct sequence
     detection_results.sort(key=lambda x: x['time'])
