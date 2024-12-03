@@ -3,13 +3,13 @@ import glob
 import concurrent.futures
 import numpy as np
 import xarray as xr
-from detection import detect_mcs_in_file_new
+from detection_hdbscan import detect_mcs_in_file
 from tracking import track_mcs
-from plot import save_detection_plot
+from plot import save_detection_plot, save_intermediate_plots
 
 # Define a function for parallel processing -> put it outside main() to make it a global function which is picklable
 def process_file(file_path):
-    result = detect_mcs_in_file_new(file_path)
+    result = detect_mcs_in_file(file_path)
     return result
 
 def main():
@@ -17,7 +17,7 @@ def main():
     data_directory = "/nas/home/dkn/Desktop/PyFLEXTRKR_WRF_ref/WRF_test/WRF_test_data/wrf_rainrate_processed/"
 
     output_path = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/"
-    output_plot_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures"
+    output_plot_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
 
     # List all NetCDF files in the directory
     file_list = sorted(glob.glob(os.path.join(data_directory, '*.nc')))
@@ -25,11 +25,11 @@ def main():
     # List to hold detection results
     detection_results = []
 
-    USE_MULTIPROCESSING = False
+    USE_MULTIPROCESSING = True
 
     if USE_MULTIPROCESSING:
         # Specify the number of cores
-        NUMBER_OF_CORES = 1  # 40 available on wegc_comp
+        NUMBER_OF_CORES = 24 # 40 available on wegc_comp
 
 
         # Use ProcessPoolExecutor for CPU-bound tasks
@@ -44,9 +44,11 @@ def main():
     else:
         # Process files sequentially for debugging
         for file_path in file_list:
-            result = detect_mcs_in_file_new(file_path)
+            result = detect_mcs_in_file(file_path)
             detection_results.append(result)
-
+            print(f'Detection of {file_path}')
+            save_intermediate_plots(result, output_plot_dir)
+            print(f'Saved plots of {file_path}')
         pass
 
     # Sort detection results by time to ensure correct sequence
@@ -56,7 +58,7 @@ def main():
     # Now, generate and save plots before tracking
     for detection_result in detection_results:
         final_labeled_regions = detection_result['final_labeled_regions']
-        prec = detection_result['prec']
+        prec = detection_result['precipitation']
         lat = detection_result['lat']
         lon = detection_result['lon']
         file_time = detection_result['time']
