@@ -3,13 +3,13 @@ import glob
 import concurrent.futures
 import numpy as np
 import xarray as xr
-from detection import detect_mcs_in_file
+from detection import detect_mcs_in_file_new
 from tracking import track_mcs
 from plot import save_detection_plot
 
 # Define a function for parallel processing -> put it outside main() to make it a global function which is picklable
 def process_file(file_path):
-    result = detect_mcs_in_file(file_path)
+    result = detect_mcs_in_file_new(file_path)
     return result
 
 def main():
@@ -59,9 +59,9 @@ def main():
             final_labeled_regions=final_labeled_regions,
             file_time=file_time_str,
             output_dir=output_plot_dir,
-            min_prec_threshold=0.1  # Adjust if necessary
+            min_prec_threshold=0.1  # Minimum precipitation to plot in color
         )
-
+    
     # Perform tracking
     print('Tracking of MCS...')
     mcs_detected_list, mcs_id_list, time_list, lat, lon = track_mcs(detection_results)

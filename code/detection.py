@@ -28,6 +28,7 @@ def apply_smoothing(prec, method='gaussian', sigma=1, size=6):
     else:
         raise ValueError("Invalid method. Choose 'gaussian' or 'median'.")
     return prec_smooth
+
 def identify_moderate_precipitation(prec, moderate_prec_threshold):
     """
     Create a mask of grid points with moderate precipitation.
@@ -70,6 +71,61 @@ def cluster_moderate_precipitation(moderate_prec_mask, lat, lon, eps_km, min_sam
             moderate_labeled_regions[i, j] = labels[idx] + 1  # labels start from 0
 
     return moderate_labeled_regions
+
+def cluster_precipitation_regions(moderate_prec_mask):
+    """
+    Cluster moderate precipitation regions using connected-component labeling.
+    """
+    structure = np.array([[1,1,1],
+                          [1,1,1],
+                          [1,1,1]])  # 8-connectivity
+    labeled_regions, num_features = label(moderate_prec_mask, structure=structure)
+    return labeled_regions, num_features
+
+def filter_clusters_by_size(labeled_regions, min_area_km2, grid_spacing_km):
+    """
+    Filter clusters based on the minimum area threshold.
+    """
+   
+    cluster_labels = np.unique(labeled_regions)
+    cluster_labels = cluster_labels[cluster_labels != 0]  # Exclude background label 0
+
+    # Area of one grid cell
+    grid_cell_area_km2 = grid_spacing_km ** 2
+
+    # Dictionary to store cluster sizes
+    cluster_sizes = {}
+
+    for label in cluster_labels:
+        cluster_mask = labeled_regions == label
+        cluster_area_km2 = np.sum(cluster_mask) * grid_cell_area_km2
+        if cluster_area_km2 >= min_area_km2:
+            cluster_sizes[label] = cluster_area_km2
+
+    # Create a mask for clusters to keep
+    filtered_labeled_regions = np.where(np.isin(labeled_regions, list(cluster_sizes.keys())), labeled_regions, 0)
+    return filtered_labeled_regions
+
+def filter_clusters_with_heavy_precipitation(filtered_labeled_regions, precipitation, heavy_prec_threshold):
+    """
+    Keep clusters that contain at least one heavy precipitation grid point.
+    """
+  
+    cluster_labels = np.unique(filtered_labeled_regions)
+    cluster_labels = cluster_labels[cluster_labels != 0]  # Exclude background label 0
+
+    clusters_to_keep = []
+
+    for label in cluster_labels:
+        cluster_mask = filtered_labeled_regions == label
+        heavy_prec_in_cluster = np.any(np.logical_and(cluster_mask, precipitation >= heavy_prec_threshold))
+        if heavy_prec_in_cluster:
+            clusters_to_keep.append(label)
+
+    # Create a final mask for clusters to keep
+    final_labeled_regions = np.where(np.isin(filtered_labeled_regions, clusters_to_keep), filtered_labeled_regions, 0)
+    return final_labeled_regions
+
 
 def calculate_cluster_areas(labeled_regions, grid_spacing_km):
     """
@@ -134,14 +190,15 @@ def select_clusters_by_heavy_precip_percentage(filtered_labeled_regions, heavy_p
     final_labeled_regions = np.where(np.isin(filtered_labeled_regions, clusters_to_keep), filtered_labeled_regions, 0)
     return final_labeled_regions
 
-def create_mcs_dataframe_new(final_labeled_regions, lat, lon, prec):
+def create_mcs_dataframe(final_labeled_regions, lat, lon, precipitation):
     """
     Create a DataFrame of the final MCS regions.
     """
+
     mcs_indices = np.where(final_labeled_regions > 0)
     mcs_lat = lat.values[mcs_indices]
     mcs_lon = lon.values[mcs_indices]
-    mcs_prec_values = prec[mcs_indices]
+    mcs_prec_values = precipitation[mcs_indices]
     mcs_region_labels = final_labeled_regions[mcs_indices]
 
     df_mcs = pd.DataFrame({
@@ -151,6 +208,7 @@ def create_mcs_dataframe_new(final_labeled_regions, lat, lon, prec):
         'region_label': mcs_region_labels
     })
     return df_mcs
+
 
 def detect_mcs_in_file(file_path, time_index=0):
     """
@@ -167,7 +225,7 @@ def detect_mcs_in_file(file_path, time_index=0):
     moderate_prec_mask = identify_moderate_precipitation(prec_to_use, moderate_prec_threshold=2)
 
     # Cluster moderate precipitation points using DBSCAN
-    moderate_labeled_regions = cluster_moderate_precipitation(moderate_prec_mask, lat, lon, eps_km=50, min_samples=5)
+    moderate_labeled_regions = cluster_moderate_precipitation(moderate_prec_mask, lat, lon, eps_km=10, min_samples=5)
 
     # Calculate cluster areas
     cluster_areas = calculate_cluster_areas(moderate_labeled_regions, grid_spacing_km=4)
@@ -176,10 +234,10 @@ def detect_mcs_in_file(file_path, time_index=0):
     filtered_labeled_regions = filter_clusters_by_area(moderate_labeled_regions, cluster_areas, min_area_km2=500)
 
     # Calculate heavy precipitation percentage in each cluster
-    heavy_prec_percentages = calculate_heavy_precip_percentage(filtered_labeled_regions, prec_to_use, heavy_prec_threshold=10)
+    heavy_prec_percentages = calculate_heavy_precip_percentage(filtered_labeled_regions, prec_to_use, heavy_prec_threshold=15)
 
     # Select clusters based on heavy precipitation percentage
-    final_labeled_regions = select_clusters_by_heavy_precip_percentage(filtered_labeled_regions, heavy_prec_percentages, min_heavy_prec_percentage=10)
+    final_labeled_regions = select_clusters_by_heavy_precip_percentage(filtered_labeled_regions, heavy_prec_percentages, min_heavy_prec_percentage=20)
 
     # Return necessary data for tracking
     return {
@@ -189,4 +247,49 @@ def detect_mcs_in_file(file_path, time_index=0):
         'lon': lon,
         'prec': prec_to_use,
         'time': ds['time'].values
+    }
+
+def detect_mcs_in_file_new(file_path, time_index=0):
+    """
+    Detect MCSs in a single file and return labeled regions and other necessary data.
+    """
+    # Load data
+    ds, lat, lon, precipitation = load_data(file_path, time_index)
+
+    # Apply smoothing (optional)
+    precipitation_smooth = apply_smoothing(precipitation, method='gaussian', sigma=1)
+    precipitation_to_use = precipitation_smooth
+
+    # Identify moderate precipitation points
+    moderate_prec_mask = identify_moderate_precipitation(precipitation_to_use, moderate_prec_threshold=2)
+
+    # Cluster moderate precipitation points using connected-component labeling
+    labeled_regions, num_features = cluster_precipitation_regions(moderate_prec_mask)
+
+    # Filter clusters by minimum size
+    filtered_labeled_regions = filter_clusters_by_size(
+        labeled_regions,
+        min_area_km2=10000,  # Adjust as needed
+        grid_spacing_km=4    # Adjust based on your data
+    )
+
+    # Identify clusters containing heavy precipitation
+    final_labeled_regions = filter_clusters_with_heavy_precipitation(
+        filtered_labeled_regions,
+        precipitation_to_use,
+        heavy_prec_threshold=15  # Adjust as needed
+    )
+
+    # Create MCS DataFrame
+    df_mcs = create_mcs_dataframe(final_labeled_regions, lat, lon, precipitation_to_use)
+
+    # Return necessary data for tracking
+    return {
+        'file_path': file_path,
+        'final_labeled_regions': final_labeled_regions,
+        'lat': lat,
+        'lon': lon,
+        'prec': precipitation_to_use,
+        'time': ds['time'].values,
+        'df_mcs': df_mcs
     }
