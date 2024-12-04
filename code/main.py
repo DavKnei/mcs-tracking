@@ -1,3 +1,5 @@
+# main.py
+
 import os
 import glob
 import concurrent.futures
@@ -6,8 +8,9 @@ import xarray as xr
 from detection import detect_mcs_in_file
 from tracking import track_mcs
 from plot import save_detection_plot, save_intermediate_plots
+from input_output import save_detection_results, load_detection_results, save_tracking_results_to_netcdf
 
-# Define a function for parallel processing -> put it outside main() to make it a global function which is picklable
+# Define a function for parallel processing
 def process_file(file_path):
     result = detect_mcs_in_file(file_path)
     return result
@@ -19,91 +22,89 @@ def main():
     output_path = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/"
     output_plot_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
 
+    detection_results_file = os.path.join(output_path, 'detection_results.nc')
+
     # List all NetCDF files in the directory
     file_list = sorted(glob.glob(os.path.join(data_directory, '*.nc')))
 
     # List to hold detection results
     detection_results = []
 
-    USE_MULTIPROCESSING = False
+    USE_MULTIPROCESSING = True
+    SAVE_PLOTS = False
 
-    if USE_MULTIPROCESSING:
-        # Specify the number of cores
-        NUMBER_OF_CORES = 24 # 40 available on wegc_comp
-
-
-        # Use ProcessPoolExecutor for CPU-bound tasks
-        with concurrent.futures.ProcessPoolExecutor(max_workers=NUMBER_OF_CORES) as executor:
-            # Map the files to the process_file function
-            futures = [executor.submit(process_file, file_path) for file_path in file_list]
-            for future in concurrent.futures.as_completed(futures):
-                print(f'MCS detection in {process_file}...')
-                detection_results.append(future.result())
-            
-        pass
+    # Check if detection results file exists and is valid
+    detection_results_exist = os.path.exists(detection_results_file)
+    if detection_results_exist:
+        detection_results = load_detection_results(detection_results_file)
+        if detection_results is not None:
+            print("Detection results loaded from file. Skipping detection step.")
+        else:
+            print("Detection results file is invalid. Running detection.")
+            detection_results_exist = False  # Set to False to run detection
     else:
-        # Process files sequentially for debugging
-        for file_path in file_list:
-            result = detect_mcs_in_file(file_path)
-            detection_results.append(result)
-            print(f'Detection of {file_path}')
-            save_intermediate_plots(result, output_plot_dir)
-            print(f'Saved plots of {file_path}')
-        pass
+        print("Detection results file does not exist. Running detection.")
 
-    # Sort detection results by time to ensure correct sequence
-    detection_results.sort(key=lambda x: x['time'])
-    print('Detection of finsihed')
+    if not detection_results_exist:
+        if USE_MULTIPROCESSING:
+            # Specify the number of cores
+            NUMBER_OF_CORES = 24  # Adjust based on your system
+
+            # Use ProcessPoolExecutor for CPU-bound tasks
+            with concurrent.futures.ProcessPoolExecutor(max_workers=NUMBER_OF_CORES) as executor:
+                # Map the files to the process_file function
+                futures = [executor.submit(process_file, file_path) for file_path in file_list]
+                for future in concurrent.futures.as_completed(futures):
+                    detection_result = future.result()
+                    detection_results.append(detection_result)
+                    print(f"MCS detection completed for time {detection_result['time']}.")
+        else:
+            # Process files sequentially
+            for file_path in file_list:
+                detection_result = detect_mcs_in_file(file_path)
+                detection_results.append(detection_result)
+                print(f"MCS detection completed for {file_path}.")
+                if SAVE_PLOTS:
+                    save_intermediate_plots(detection_result, output_plot_dir)
+
+        # Sort detection results by time to ensure correct sequence
+        detection_results.sort(key=lambda x: x['time'])
+        print('Detection finished.')
+
+        # Save detection results to NetCDF file
+        save_detection_results(detection_results, detection_results_file)
+    else:
+        # Detection results were loaded from file
+        pass
 
     # Now, generate and save plots before tracking
-    for detection_result in detection_results:
-        final_labeled_regions = detection_result['final_labeled_regions']
-        prec = detection_result['precipitation']
-        lat = detection_result['lat']
-        lon = detection_result['lon']
-        file_time = detection_result['time']
-        file_time_str = np.datetime_as_string(file_time, unit='h')  # Convert time to string format
+    if SAVE_PLOTS:
+        for detection_result in detection_results:
+            final_labeled_regions = detection_result['final_labeled_regions']
+            prec = detection_result['precipitation']  # Ensure 'precipitation' is in detection_result
+            lat = detection_result['lat']
+            lon = detection_result['lon']
+            file_time = detection_result['time']
+            file_time_str = np.datetime_as_string(file_time, unit='h')  # Convert time to string format
 
-        # Call the plotting function
-        save_detection_plot(
-            lon=lon,
-            lat=lat,
-            prec=prec,
-            final_labeled_regions=final_labeled_regions,
-            file_time=file_time_str,
-            output_dir=output_plot_dir,
-            min_prec_threshold=0.1  # Minimum precipitation to plot in color
-        )
-    
+            save_detection_plot(
+                lon=lon,
+                lat=lat,
+                prec=prec,
+                final_labeled_regions=final_labeled_regions,
+                file_time=file_time_str,
+                output_dir=output_plot_dir,
+                min_prec_threshold=0.1  # Minimum precipitation to plot in color
+            )
+
     # Perform tracking
     print('Tracking of MCS...')
     mcs_detected_list, mcs_id_list, time_list, lat, lon = track_mcs(detection_results)
-    print('Tracking of MCS finsihed')
-    # Stack the results into arrays
-    mcs_detected_all = np.stack(mcs_detected_list, axis=0)
-    mcs_id_all = np.stack(mcs_id_list, axis=0)
+    print('Tracking of MCS finished.')
 
-    # Create the dataset
-    output_ds = xr.Dataset(
-        {
-            'mcs_detected': (['time', 'y', 'x'], mcs_detected_all),
-            'mcs_id': (['time', 'y', 'x'], mcs_id_all)
-        },
-        coords={
-            'time': time_list,
-            'lat': (['y', 'x'], lat.values),
-            'lon': (['y', 'x'], lon.values)
-        },
-        attrs={
-            'description': 'MCS detection and tracking results',
-            'min_overlap_percentage': 10,
-            'note': 'Merging and splitting events are not fully handled and may result in warnings.'
-        }
-    )
-
-    print(f'Save file to {output_path}')
-    # Save to NetCDF
-    output_ds.to_netcdf(os.path.join(output_path, 'wrf_test_track.nc'))
+    # Save tracking results to NetCDF
+    tracking_output_dir = os.path.join(output_path, 'tracking_results')
+    save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, lat, lon, tracking_output_dir)
 
 if __name__ == "__main__":
     main()

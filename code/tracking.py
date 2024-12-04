@@ -1,5 +1,28 @@
 import numpy as np
+import os
 import warnings
+import datetime
+import xarray as xr
+
+def handle_splitting_event(overlap_area, next_cluster_id):
+    """
+    Handle splitting events where one previous cluster overlaps with multiple current clusters.
+
+    Parameters:
+    - overlap_area: Dictionary mapping current cluster labels to overlap percentages.
+    - next_cluster_id: Integer representing the next available cluster ID.
+
+    Returns:
+    - current_cluster_ids: Dictionary mapping current cluster labels to assigned cluster IDs.
+    - next_cluster_id: Updated next_cluster_id after assigning new IDs.
+    """
+    current_cluster_ids = {}
+    for curr_label in overlap_area.keys():
+        # Assign new IDs to the split clusters
+        current_cluster_ids[curr_label] = next_cluster_id
+        next_cluster_id += 1
+    return current_cluster_ids, next_cluster_id
+
 
 def track_mcs(detection_results):
     """
@@ -19,7 +42,6 @@ def track_mcs(detection_results):
     for detection_result in detection_results:
         final_labeled_regions = detection_result['final_labeled_regions']
         current_time = detection_result['time']
-        current_prec = detection_result['precipitation']
         current_lat = detection_result['lat']
         current_lon = detection_result['lon']
 
@@ -70,11 +92,20 @@ def track_mcs(detection_results):
                     next_cluster_id += 1
                 else:
                     # Multiple overlaps detected (merging/splitting)
-                    warnings.warn(f"Cluster splitting or merging detected at time {current_time}.")
-                    # For now, assign the ID of the cluster with the largest overlap
-                    assigned_id = max(overlap_area, key=overlap_area.get)
-                    mcs_id[cluster_mask] = assigned_id
-                    current_cluster_ids[label] = assigned_id
+                    prev_id = list(overlap_area.keys())
+                    if len(prev_id) == 1:
+                        # Splitting event
+                        splitting_ids, next_cluster_id = handle_splitting_event(
+                            overlap_area, next_cluster_id)
+                        mcs_id[cluster_mask] = splitting_ids[label]
+                        current_cluster_ids[label] = splitting_ids[label]
+                    else:
+                    # Merging events
+                        warnings.warn(f"Merging not yet implemented but found at time {current_time}.")
+                        # For now, assign the ID of the cluster with the largest overlap
+                        assigned_id = max(overlap_area, key=overlap_area.get)
+                        mcs_id[cluster_mask] = assigned_id
+                        current_cluster_ids[label] = assigned_id
 
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
