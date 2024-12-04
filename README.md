@@ -6,8 +6,9 @@ The code processes precipitation data from NetCDF files, identifies MCS regions,
 ## Features
 
 - **Detection of MCS Regions**: Identifies moderate and heavy precipitation areas using configurable thresholds.
-- **Clustering**: Uses DBSCAN clustering to group precipitation grid points into potential MCS regions.
-- **Expansion of Clusters**: Expands clusters to include adjacent moderate precipitation areas.
+- **Clustering**: Uses clustering to group moderate precipitation grid points into potential MCS regions.
+- **Convective Plumns**: Uses watershed segmentation to look for heavy precipitation regions in the clusters.
+- **Cluster Filter**: Filter the moderate precipitation clusters by size and number of convective plumns.
 - **Tracking Over Time**: Tracks MCS regions across multiple time steps based on spatial overlap.
 - **Parallel Processing**: Supports parallel processing for efficient computation.
 - **Visualization**: Generates plots of detected MCS regions for each time step.
@@ -46,7 +47,7 @@ The code processes precipitation data from NetCDF files, identifies MCS regions,
 ## Code Structure
 
 - `main.py`: Main script that orchestrates the detection and tracking workflow.
-- `detection.py`: Contains functions for data loading, preprocessing, and MCS detection.
+- `detection_hdbscan.py`: Contains functions for data loading, preprocessing, and MCS detection ussing HDBSCAN for clustering.
 - `tracking.py`: Implements the tracking of MCS regions across time steps.
 - `plot.py`: Includes functions for visualizing precipitation data and detected MCS regions.
 - `requirements.txt`: Lists the required Python packages.
@@ -67,27 +68,33 @@ The code processes precipitation data from NetCDF files, identifies MCS regions,
   ```python
   NUMBER_OF_CORES = 4  # Set this to the number of cores you want to use
   ```
-
+  ```python
+  USE_MULTIPROCESSING = True  # Disable multiprocessing for debugging
+  ```
 ### Detection Parameters in `detection.py`:
 
 - **Precipitation Thresholds**:
 
   ```python
-  moderate_prec_threshold = 2    # Moderate precipitation threshold (mm)
-  heavy_prec_threshold = 10      # Heavy precipitation threshold (mm)
+  moderate_prec_threshold = 1    # Moderate precipitation threshold (mm)
+  heavy_prec_threshold = 15      # Heavy precipitation threshold (mm)
   ```
 
 - **Clustering Parameters**:
 
   ```python
-  eps_km = 50         # DBSCAN eps parameter in kilometers
-  min_samples = 5    # DBSCAN min_samples parameter
+  min_cluster_size = 50  # HDBSCAN  Minimum size of clusters
   ```
 
 - **Area Threshold**:
 
   ```python
-  min_area_km2 = 500  # Minimum cluster area in square kilometers
+  min_area_km2 = 10000  # Minimum cluster area in square kilometers
+  ```
+- **Convective plumns threshold**:
+
+  ```python
+    min_plumes = 2  # minimum number of heavy precipitation regions inside a cluster
   ```
 
 - **Grid Spacing**:
