@@ -6,13 +6,34 @@ from scipy.ndimage import distance_transform_edt
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from skimage.measure import regionprops, label
+from input_output import load_data
 
 def smooth_precipitation_field(precipitation, sigma=1):
+    """
+    Apply Gaussian smoothing to the precipitation field.
+
+    Parameters:
+    - precipitation: 2D array of precipitation values.
+    - sigma: Standard deviation for Gaussian kernel.
+
+    Returns:
+    - Smoothed precipitation field as a 2D array.
+    """
     return gaussian_filter(precipitation, sigma=sigma)
 
 def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_size):
     """
     Cluster moderate precipitation regions using HDBSCAN.
+
+    Parameters:
+    - latitudes: 2D array of latitude values corresponding to the precipitation grid.
+    - longitudes: 2D array of longitude values corresponding to the precipitation grid.
+    - precipitation_mask: 2D boolean array where True indicates moderate precipitation.
+    - min_cluster_size: Minimum number of samples in a cluster for HDBSCAN.
+
+    Returns:
+    - labeled_array: 2D array with cluster labels for each grid point.
+      Points not belonging to any cluster are labeled as -1.
     """
     lat_points = latitudes[precipitation_mask]
     lon_points = longitudes[precipitation_mask]
@@ -32,6 +53,14 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
 def identify_convective_plumes(precipitation, clusters, heavy_threshold):
     """
     Identify convective plumes within clusters using watershed segmentation.
+
+    Parameters:
+    - precipitation: 2D array of smoothed precipitation values.
+    - clusters: 2D array of cluster labels obtained from clustering.
+    - heavy_threshold: Precipitation threshold to identify heavy precipitation areas (convective plumes).
+
+    Returns:
+    - convective_plume_labels: 2D array with labels for convective plumes.
     """
     convective_plume_labels = np.zeros_like(clusters)
     cluster_labels = np.unique(clusters)
@@ -66,7 +95,17 @@ def identify_convective_plumes(precipitation, clusters, heavy_threshold):
 
 def filter_mcs_candidates(clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2):
     """
-    Filter clusters to identify MCS candidates based on area and convective plumes.
+    Filter clusters to identify MCS candidates based on area and number of convective plumes.
+
+    Parameters:
+    - clusters: 2D array of cluster labels.
+    - convective_plumes: 2D array of convective plume labels.
+    - min_area_km2: Minimum area threshold for MCS candidate (in km²).
+    - min_plumes: Minimum number of convective plumes required for MCS candidate.
+    - grid_cell_area_km2: Area of a single grid cell (in km²).
+
+    Returns:
+    - mcs_candidate_labels: List of cluster labels that meet the MCS criteria.
     """
     mcs_candidate_labels = []
     cluster_labels = np.unique(clusters)
@@ -93,7 +132,7 @@ def extract_shape_features(clusters, lat, lon, grid_spacing_km):
     - grid_spacing_km: Approximate grid spacing in kilometers.
 
     Returns:
-    - shape_features: Dictionary with cluster labels as keys and feature dicts as values.
+    - shape_features: Dictionary with cluster labels as keys and feature dictionaries as values.
     """
     shape_features = {}
     # Label clusters for regionprops
@@ -107,7 +146,10 @@ def extract_shape_features(clusters, lat, lon, grid_spacing_km):
         binary_image = cluster_mask.astype(int)
 
         # Compute region properties
-        props = regionprops(binary_image)[0]  # There is only one region in the mask
+        props_list = regionprops(binary_image)
+        if len(props_list) == 0:
+            continue  # Skip if no properties are found
+        props = props_list[0]  # There should be only one region in the mask
 
         # Extract features
         area = props.area * (grid_spacing_km ** 2)  # Convert to km²
@@ -167,7 +209,7 @@ def classify_mcs_types(shape_features):
             mcs_type = 'Squall Line'
         elif aspect_ratio <= 2 and area >= 100000 and circularity >= 0.7:
             mcs_type = 'MCC'
-        elif aspect_ratio >= 2 and aspect_ratio < 5:
+        elif 2 <= aspect_ratio < 5:
             mcs_type = 'Linear MCS'
         else:
             mcs_type = 'Other MCS'
@@ -176,16 +218,27 @@ def classify_mcs_types(shape_features):
 
     return mcs_classification
 
-
 def detect_mcs_in_file(file_path, time_index=0):
     """
     Detect MCSs in a single file using HDBSCAN for clustering.
+
+    Parameters:
+    - file_path: Path to the NetCDF file containing precipitation data.
+    - time_index: Index of the time step to process.
+
+    Returns:
+    - detection_result: Dictionary containing detection results, including:
+        - 'file_path': Path to the input file.
+        - 'final_labeled_regions': 2D array of final MCS candidate labels.
+        - 'moderate_prec_clusters': 2D array of initial clusters from HDBSCAN.
+        - 'lat': 2D array of latitude values.
+        - 'lon': 2D array of longitude values.
+        - 'precipitation': 2D array of smoothed precipitation values.
+        - 'time': Timestamp corresponding to the processed time index.
+        - 'convective_plumes': 2D array of convective plume labels.
     """
     # Load data
-    ds = xr.open_dataset(file_path)
-    lat = ds['lat'].values
-    lon = ds['lon'].values
-    precipitation = ds['pr'][time_index, :, :].values  # Adjust variable name if necessary
+    ds, lat, lon, precipitation = load_data(file_path, time_index)
 
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
@@ -196,7 +249,7 @@ def detect_mcs_in_file(file_path, time_index=0):
 
     # Step 3: Cluster moderate precipitation points using HDBSCAN
     min_cluster_size = 50  # Minimum size of clusters
-    cluster_selection_epsilon = 100  # km A distance threshold. Clusters below this value will be merged. -> not used
+    cluster_selection_epsilon = 100  # km (Not used in this function)
     clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_cluster_size)
 
     # Step 4: Identify convective plumes within clusters
@@ -205,22 +258,24 @@ def detect_mcs_in_file(file_path, time_index=0):
 
     # Step 5: Filter clusters based on area and plume criteria
     min_area_km2 = 10000  # Adjust as needed
-    min_plumes = 2       # Adjust as needed
-    grid_spacing_km = 4  # km
-    grid_cell_area_km2 = grid_spacing_km**2
+    min_plumes = 2        # Adjust as needed
+    grid_spacing_km = 4   # km
+    grid_cell_area_km2 = grid_spacing_km ** 2
 
-    # Step 6: Filter MCS canditates based on number of convective plumes and area
-    mcs_candidate_labels = filter_mcs_candidates(clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2)
+    # Step 6: Filter MCS candidates based on number of convective plumes and area
+    mcs_candidate_labels = filter_mcs_candidates(
+        clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2
+    )
 
     # Create final labeled regions for MCS candidates
     final_labeled_regions = np.where(np.isin(clusters, mcs_candidate_labels), clusters, 0)
 
-    # Step 7: Extract shape features from clusters 
+    # Step 7: Extract shape features from clusters
     shape_features = extract_shape_features(final_labeled_regions, lat, lon, grid_spacing_km)
-    
+
     # Step 8: Classify MCS types
     mcs_classification = classify_mcs_types(shape_features)
-    
+
     # Prepare detection result
     detection_result = {
         'file_path': file_path,
@@ -234,17 +289,4 @@ def detect_mcs_in_file(file_path, time_index=0):
         'mcs_classification': mcs_classification
     }
 
-    # Prepare detection result
-    detection_result = {
-        'file_path': file_path,
-        'final_labeled_regions': final_labeled_regions,
-        'moderate_prec_clusters': clusters,
-        'lat': lat,
-        'lon': lon,
-        'precipitation': precipitation_smooth,
-        'time': ds['time'].values[time_index],
-        'convective_plumes': convective_plumes
-    }
-
     return detection_result
-
