@@ -7,7 +7,7 @@ The code processes precipitation data from NetCDF files, identifies MCS regions,
 
 - **Detection of MCS Regions**: Identifies moderate and heavy precipitation areas using configurable thresholds.
 - **Clustering**: Uses clustering to group moderate precipitation grid points into potential MCS regions.
-- **Convective Plumns**: Uses watershed segmentation to look for heavy precipitation regions in the clusters.
+- **Convective Plums**: Uses watershed segmentation to look for heavy precipitation regions in the clusters.
 - **Cluster Filter**: Filter the moderate precipitation clusters by size and number of convective plumns.
 - **Tracking Over Time**: Tracks MCS regions across multiple time steps based on spatial overlap.
 - **Parallel Processing**: Supports parallel processing for efficient computation.
