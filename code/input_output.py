@@ -16,7 +16,7 @@ def load_data(file_path, time_index=0):
     """
     ds = xr.open_dataset(file_path)
     ds = ds.isel(time=time_index)  # Select the specified time step
-    lat = ds['lat']
-    lon = ds['lon']
+    lat = ds['lat'].values
+    lon = ds['lon'].values
     prec = ds['pr']
     return ds, lat, lon, prec
