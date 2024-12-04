@@ -3,7 +3,7 @@ import glob
 import concurrent.futures
 import numpy as np
 import xarray as xr
-from detection_hdbscan import detect_mcs_in_file
+from detection import detect_mcs_in_file
 from tracking import track_mcs
 from plot import save_detection_plot, save_intermediate_plots
 
