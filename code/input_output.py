@@ -1,4 +1,7 @@
 import xarray as xr
+import numpy as np
+import os 
+import datetime
 
 def load_data(file_path, time_index=0):
     """
@@ -113,49 +116,51 @@ def load_detection_results(input_filepath):
 
 def save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, lat, lon, output_dir):
     """
-    Save tracking results to NetCDF files.
+    Save tracking results to a NetCDF file.
 
     Parameters:
-    - mcs_detected_list: List of MCS detection arrays (binary).
-    - mcs_id_list: List of MCS ID arrays.
+    - mcs_detected_list: List of MCS detection arrays (binary), each of shape (y, x).
+    - mcs_id_list: List of MCS ID arrays, each of shape (y, x).
     - time_list: List of timestamps.
-    - lat: 2D array of latitudes.
-    - lon: 2D array of longitudes.
-    - output_dir: Directory to save the NetCDF files.
+    - lat: 2D array of latitudes, shape (y, x).
+    - lon: 2D array of longitudes, shape (y, x).
+    - output_dir: Directory to save the NetCDF file.
     """
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    for idx, current_time in enumerate(time_list):
-        mcs_detected = mcs_detected_list[idx]
-        mcs_id = mcs_id_list[idx]
+    # Stack the mcs_detected_list and mcs_id_list along the time dimension
+    mcs_detected_all = np.stack(mcs_detected_list, axis=0)  # Shape: (time, y, x)
+    mcs_id_all = np.stack(mcs_id_list, axis=0)              # Shape: (time, y, x)
 
-        # Create an xarray Dataset
-        ds = xr.Dataset(
-            {
-                'mcs_detected': (('lat', 'lon'), mcs_detected),
-                'mcs_id': (('lat', 'lon'), mcs_id)
-            },
-            coords={
-                'lat': (('lat', 'lon'), lat),
-                'lon': (('lat', 'lon'), lon),
-                'time': current_time
-            }
-        )
+    # Create an xarray Dataset
+    ds = xr.Dataset(
+        {
+            'mcs_detected': (['time', 'y', 'x'], mcs_detected_all),
+            'mcs_id': (['time', 'y', 'x'], mcs_id_all)
+        },
+        coords={
+            'time': time_list,
+            'y': np.arange(lat.shape[0]),
+            'x': np.arange(lat.shape[1]),
+            'lat': (['y', 'x'], lat),
+            'lon': (['y', 'x'], lon)
+        }
+    )
 
-        # Set attributes
-        ds['mcs_detected'].attrs['description'] = 'Binary mask of detected MCSs'
-        ds['mcs_id'].attrs['description'] = 'Unique IDs of tracked MCSs'
-        ds.attrs['title'] = 'MCS Tracking Results'
-        ds.attrs['institution'] = 'Your Institution'
-        ds.attrs['source'] = 'MCS Detection and Tracking Algorithm'
-        ds.attrs['history'] = f'Created on {datetime.datetime.now()}'
-        ds.attrs['references'] = 'Your references'
+    # Set attributes
+    ds['mcs_detected'].attrs['description'] = 'Binary mask of detected MCSs'
+    ds['mcs_id'].attrs['description'] = 'Unique IDs of tracked MCSs'
+    ds['lat'].attrs['description'] = 'Latitude coordinate'
+    ds['lon'].attrs['description'] = 'Longitude coordinate'
+    ds.attrs['title'] = 'MCS Tracking Results'
+    ds.attrs['institution'] = 'Wegener Center for Global and Climate Change / University of Graz'
+    ds.attrs['source'] = 'MCS Detection and Tracking Algorithm'
+    ds.attrs['history'] = f'Created on {datetime.datetime.now()}'
+    ds.attrs['references'] = 'David Kneidinger <david.kneidinger@uni-graz.at>'
 
-        # Save to NetCDF file
-        time_str = np.datetime_as_string(current_time, unit='h')
-        output_filename = f'mcs_tracking_{time_str}.nc'
-        output_filepath = os.path.join(output_dir, output_filename)
-        ds.to_netcdf(output_filepath)
+    # Save to NetCDF file
+    output_filepath = os.path.join(output_dir, 'mcs_tracking_results.nc')
+    ds.to_netcdf(output_filepath)
 
-        print(f"Saved tracking results to {output_filepath}")
+    print(f"Saved tracking results to {output_filepath}")
