@@ -64,3 +64,49 @@ def save_detection_results(detection_results, output_filepath):
     # Save to NetCDF file
     ds.to_netcdf(output_filepath)
     print(f"Detection results saved to {output_filepath}")
+
+def load_detection_results(input_filepath):
+    """
+    Load detection results from a NetCDF file.
+
+    Parameters:
+    - input_filepath: Path to the input NetCDF file.
+
+    Returns:
+    - detection_results: List of detection_result dictionaries.
+    """
+    if not os.path.exists(input_filepath):
+        print(f"File {input_filepath} does not exist.")
+        return None
+
+    try:
+        ds = xr.open_dataset(input_filepath)
+    except Exception as e:
+        print(f"Error opening {input_filepath}: {e}")
+        return None
+
+    # Check if required variables are present
+    required_vars = ['final_labeled_regions', 'lat', 'lon', 'time']
+    for var in required_vars:
+        if var not in ds.variables:
+            print(f"Variable {var} not found in {input_filepath}.")
+            return None
+
+    # Extract data
+    final_labeled_regions_array = ds['final_labeled_regions'].values
+    times = ds['time'].values
+    lat = ds['lat'].values
+    lon = ds['lon'].values
+
+    detection_results = []
+    for idx, time in enumerate(times):
+        detection_result = {
+            'final_labeled_regions': final_labeled_regions_array[idx],
+            'time': time,
+            'lat': lat,
+            'lon': lon
+        }
+        detection_results.append(detection_result)
+
+    print(f"Detection results loaded from {input_filepath}")
+    return detection_results
