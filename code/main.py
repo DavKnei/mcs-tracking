@@ -25,7 +25,7 @@ def main():
     # List to hold detection results
     detection_results = []
 
-    USE_MULTIPROCESSING = True
+    USE_MULTIPROCESSING = False
 
     if USE_MULTIPROCESSING:
         # Specify the number of cores
