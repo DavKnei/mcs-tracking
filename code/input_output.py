@@ -110,3 +110,52 @@ def load_detection_results(input_filepath):
 
     print(f"Detection results loaded from {input_filepath}")
     return detection_results
+
+def save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, lat, lon, output_dir):
+    """
+    Save tracking results to NetCDF files.
+
+    Parameters:
+    - mcs_detected_list: List of MCS detection arrays (binary).
+    - mcs_id_list: List of MCS ID arrays.
+    - time_list: List of timestamps.
+    - lat: 2D array of latitudes.
+    - lon: 2D array of longitudes.
+    - output_dir: Directory to save the NetCDF files.
+    """
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    for idx, current_time in enumerate(time_list):
+        mcs_detected = mcs_detected_list[idx]
+        mcs_id = mcs_id_list[idx]
+
+        # Create an xarray Dataset
+        ds = xr.Dataset(
+            {
+                'mcs_detected': (('lat', 'lon'), mcs_detected),
+                'mcs_id': (('lat', 'lon'), mcs_id)
+            },
+            coords={
+                'lat': (('lat', 'lon'), lat),
+                'lon': (('lat', 'lon'), lon),
+                'time': current_time
+            }
+        )
+
+        # Set attributes
+        ds['mcs_detected'].attrs['description'] = 'Binary mask of detected MCSs'
+        ds['mcs_id'].attrs['description'] = 'Unique IDs of tracked MCSs'
+        ds.attrs['title'] = 'MCS Tracking Results'
+        ds.attrs['institution'] = 'Your Institution'
+        ds.attrs['source'] = 'MCS Detection and Tracking Algorithm'
+        ds.attrs['history'] = f'Created on {datetime.datetime.now()}'
+        ds.attrs['references'] = 'Your references'
+
+        # Save to NetCDF file
+        time_str = np.datetime_as_string(current_time, unit='h')
+        output_filename = f'mcs_tracking_{time_str}.nc'
+        output_filepath = os.path.join(output_dir, output_filename)
+        ds.to_netcdf(output_filepath)
+
+        print(f"Saved tracking results to {output_filepath}")
