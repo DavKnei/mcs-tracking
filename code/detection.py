@@ -239,7 +239,7 @@ def detect_mcs_in_file(file_path, time_index=0):
     """
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, time_index)
-
+    
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
 
@@ -250,8 +250,9 @@ def detect_mcs_in_file(file_path, time_index=0):
     # Step 3: Cluster moderate precipitation points using HDBSCAN
     min_cluster_size = 50  # Minimum size of clusters
     cluster_selection_epsilon = 100  # km (Not used in this function)
+    
     clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_cluster_size)
-
+    
     # Step 4: Identify convective plumes within clusters
     heavy_threshold = 15  # mm
     convective_plumes = identify_convective_plumes(precipitation_smooth, clusters, heavy_threshold)
@@ -275,15 +276,16 @@ def detect_mcs_in_file(file_path, time_index=0):
 
     # Step 8: Classify MCS types
     mcs_classification = classify_mcs_types(shape_features)
-
+    
     # Prepare detection result
     detection_result = {
         'file_path': file_path,
+        'moderate_prec_clusters': clusters,
         'final_labeled_regions': final_labeled_regions,
         'lat': lat,
         'lon': lon,
         'precipitation': precipitation_smooth,
-        'time': ds['time'].values[time_index],
+        'time': ds['time'].values,
         'convective_plumes': convective_plumes,
         'shape_features': shape_features,
         'mcs_classification': mcs_classification
