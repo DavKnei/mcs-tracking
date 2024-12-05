@@ -5,11 +5,14 @@ data_directory: "/path/to/data"
 output_path: "/path/to/output_data"
 output_plot_dir: "/path/to/figures"
 tracking_output_dir: "/path/to/tracking_output"
+grid_spacing_km: 4.0
 
 # Detection parameters
 min_size_threshold: 10
 heavy_precip_threshold: 20.0
 moderate_precip_threshold: 5.0
+min_nr_plumes: 1
+
 
 # Tracking parameters
 main_lifetime_thresh: 6

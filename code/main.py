@@ -6,6 +6,7 @@ import concurrent.futures
 import argparse
 import numpy as np
 import xarray as xr
+import yaml
 from detection import detect_mcs_in_file
 from tracking import track_mcs, filter_main_mcs
 from plot import save_detection_plot, save_intermediate_plots
@@ -16,44 +17,64 @@ from input_output import (
 )
 
 # Define a function for parallel processing
-def process_file(file_path):
-    result = detect_mcs_in_file(file_path)
+def process_file(
+    file_path,
+    heavy_precip_threshold,
+    moderate_precip_threshold,
+    min_size_threshold,
+    min_nr_plumes,
+    grid_spacing_km,
+):
+    result = detect_mcs_in_file(
+        file_path,
+        heavy_precip_threshold,
+        moderate_precip_threshold,
+        min_size_threshold,
+        min_nr_plumes,
+        grid_spacing_km,
+    )
     return result
 
+
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='MCS Detection and Tracking')
-    parser.add_argument('--config', type=str, help='Path to configuration file', required=True)
+    parser = argparse.ArgumentParser(description="MCS Detection and Tracking")
+    parser.add_argument(
+        "--config", type=str, help="Path to configuration file", required=True
+    )
     return parser.parse_args()
 
+
 def main():
-     # Parse command-line arguments
+    # Parse command-line arguments
     args = parse_arguments()
-    
+
     # Load the configuration file
     config_path = args.config
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    
+
     # Access parameters from config
-    data_directory = config['data_directory']
-    output_path = config['output_path']
-    output_plot_dir = config['output_plot_dir']
-    tracking_output_dir = config['tracking_output_dir']
-    
+    data_directory = config["data_directory"]
+    output_path = config["output_path"]
+    output_plot_dir = config["output_plot_dir"]
+    tracking_output_dir = config["tracking_output_dir"]
+    grid_spacing_km = config["grid_size_km"]
+
     # Detection parameters
-    min_size_threshold = config.get('min_size_threshold', 10)
-    heavy_precip_threshold = config.get('heavy_precip_threshold', 20.0)
-    moderate_precip_threshold = config.get('moderate_precip_threshold', 5.0)
-    
+    min_size_threshold = config.get("min_size_threshold", 10)
+    heavy_precip_threshold = config.get("heavy_precip_threshold", 20.0)
+    moderate_precip_threshold = config.get("moderate_precip_threshold", 5.0)
+    min_nr_plumes = config.get("min_nr_plumes", 1)
+
     # Tracking parameters
-    main_lifetime_thresh = config.get('main_lifetime_thresh', 6)
-    main_area_thresh = config.get('main_area_thresh', 10000)
-    grid_cell_area_km2 = config.get('grid_cell_area_km2', 16)
-    nmaxmerge = config.get('nmaxmerge', 5)
-    
+    main_lifetime_thresh = config.get("main_lifetime_thresh", 6)
+    main_area_thresh = config.get("main_area_thresh", 10000)
+    grid_cell_area_km2 = config.get("grid_cell_area_km2", 16)
+    nmaxmerge = config.get("nmaxmerge", 5)
+
     # Other parameters
-    plotting_enabled = config.get('plotting_enabled', True)
-    
+    plotting_enabled = config.get("plotting_enabled", True)
+
     # Ensure directories exist
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(output_plot_dir, exist_ok=True)
@@ -104,7 +125,14 @@ def main():
         else:
             # Process files sequentially
             for file_path in file_list:
-                detection_result = detect_mcs_in_file(file_path)
+                detection_result = detect_mcs_in_file(
+                    file_path,
+                    heavy_precip_threshold,
+                    moderate_precip_threshold,
+                    min_size_threshold,
+                    min_nr_plumes,
+                    grid_spacing_km,
+                )
                 detection_results.append(detection_result)
                 print(f"MCS detection completed for {file_path}.")
                 if SAVE_PLOTS:

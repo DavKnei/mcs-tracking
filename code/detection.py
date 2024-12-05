@@ -94,7 +94,7 @@ def identify_convective_plumes(precipitation, clusters, heavy_threshold):
 
 
 def filter_mcs_candidates(
-    clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2
+    clusters, convective_plumes, min_area_km2, min_nr_plumes, grid_cell_area_km2
 ):
     """
     Filter clusters to identify MCS candidates based on area and number of convective plumes.
@@ -103,7 +103,7 @@ def filter_mcs_candidates(
     - clusters: 2D array of cluster labels.
     - convective_plumes: 2D array of convective plume labels.
     - min_area_km2: Minimum area threshold for MCS candidate (in km²).
-    - min_plumes: Minimum number of convective plumes required for MCS candidate.
+    - min_nr_plumes: Minimum number of convective plumes required for MCS candidate.
     - grid_cell_area_km2: Area of a single grid cell (in km²).
 
     Returns:
@@ -119,7 +119,7 @@ def filter_mcs_candidates(
         plumes_in_cluster = np.unique(convective_plumes[cluster_mask])
         num_plumes = len(plumes_in_cluster[plumes_in_cluster != 0])
 
-        if area_km2 >= min_area_km2 and num_plumes >= min_plumes:
+        if area_km2 >= min_area_km2 and num_plumes >= min_nr_plumes:
             mcs_candidate_labels.append(label_value)
 
     return mcs_candidate_labels
@@ -227,24 +227,29 @@ def classify_mcs_types(shape_features):
     return mcs_classification
 
 
-def detect_mcs_in_file(file_path, time_index=0):
+def detect_mcs_in_file(
+    file_path,
+    heavy_precip_threshold,
+    moderate_precip_threshold,
+    min_size_threshold,
+    min_nr_plumes,
+    grid_spacing_km,
+    time_index=0,
+):
     """
     Detect MCSs in a single file using HDBSCAN for clustering.
 
     Parameters:
     - file_path: Path to the NetCDF file containing precipitation data.
+    - heavy_precip_threshold: Threshold for heavy precipitation (mm/h).
+    - moderate_precip_threshold: Threshold for moderate precipitation (mm/h).
+    - min_size_threshold: Minimum size threshold for clusters (number of grid cells).
+    - min_nr_plumes: Minimum number of convective plumes required for MCS candidate.
+    - grid_spacing_km: Approximate grid spacing in kilometers.
     - time_index: Index of the time step to process.
 
     Returns:
-    - detection_result: Dictionary containing detection results, including:
-        - 'file_path': Path to the input file.
-        - 'final_labeled_regions': 2D array of final MCS candidate labels.
-        - 'moderate_prec_clusters': 2D array of initial clusters from HDBSCAN.
-        - 'lat': 2D array of latitude values.
-        - 'lon': 2D array of longitude values.
-        - 'precipitation': 2D array of smoothed precipitation values.
-        - 'time': Timestamp corresponding to the processed time index.
-        - 'convective_plumes': 2D array of convective plume labels.
+    - detection_result: Dictionary containing detection results.
     """
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, time_index)
@@ -253,30 +258,24 @@ def detect_mcs_in_file(file_path, time_index=0):
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
 
     # Step 2: Create binary mask for moderate precipitation
-    moderate_threshold = 1  # mm
-    precipitation_mask = precipitation_smooth >= moderate_threshold
+    precipitation_mask = precipitation_smooth >= moderate_precip_threshold
 
     # Step 3: Cluster moderate precipitation points using HDBSCAN
-    min_cluster_size = 50  # Minimum size of clusters
-    cluster_selection_epsilon = 100  # km (Not used in this function)
-
-    clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_cluster_size)
+    clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_size_threshold)
 
     # Step 4: Identify convective plumes within clusters
-    heavy_threshold = 15  # mm
     convective_plumes = identify_convective_plumes(
-        precipitation_smooth, clusters, heavy_threshold
+        precipitation_smooth, clusters, heavy_precip_threshold
     )
 
-    # Step 5: Filter clusters based on area and plume criteria
-    min_area_km2 = 5000  # minimum threshold for all features to detect (should be smaller than min MCS size)
-    min_plumes = 2  # Adjust as needed
-    grid_spacing_km = 4  # km
-    grid_cell_area_km2 = grid_spacing_km**2
-
     # Step 6: Filter MCS candidates based on number of convective plumes and area
+    grid_cell_area_km2 = grid_spacing_km**2
     mcs_candidate_labels = filter_mcs_candidates(
-        clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2
+        clusters,
+        convective_plumes,
+        min_size_threshold,
+        min_nr_plumes,
+        grid_cell_area_km2,
     )
 
     # Create final labeled regions for MCS candidates
