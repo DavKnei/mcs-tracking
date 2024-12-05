@@ -3,7 +3,23 @@ import os
 import warnings
 import datetime
 import xarray as xr
+from dataclasses import dataclass
+from typing import List
+from collections import defaultdict
 
+@dataclass
+class MergingEvent:
+    time: datetime.datetime
+    parent_ids: List[int]
+    child_id: int
+    area: float  # Area of the merged cluster
+
+@dataclass
+class SplittingEvent:
+    time: datetime.datetime
+    parent_id: int
+    child_ids: List[int]
+    area: float  # Area of the original cluster
 
 def handle_splitting_event(overlap_area, next_cluster_id):
     """
@@ -72,7 +88,17 @@ def track_mcs(
 ):
     """
     Track MCSs across time steps using detection results.
-     Returns mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids.
+
+    Returns:
+    - mcs_detected_list
+    - mcs_id_list
+    - lifetime_list
+    - time_list
+    - lat
+    - lon
+    - main_mcs_ids
+    - merging_events
+    - splitting_events
     """
     previous_labeled_regions = None
     previous_cluster_ids = {}
@@ -86,10 +112,13 @@ def track_mcs(
     lon = None
 
     # Dictionary to keep track of the lifetime for each MCS ID
-    lifetime_dict = {}
-    max_area_dict = {}
+    lifetime_dict = defaultdict(int)
+    max_area_dict = defaultdict(float)
 
-    for detection_result in detection_results:
+    merging_events = []
+    splitting_events = []
+
+    for idx, detection_result in enumerate(detection_results):
         final_labeled_regions = detection_result["final_labeled_regions"]
         current_time = detection_result["time"]
         current_lat = detection_result["lat"]
@@ -108,9 +137,15 @@ def track_mcs(
         cluster_labels = np.unique(final_labeled_regions)
         cluster_labels = cluster_labels[cluster_labels != 0]  # Exclude background
 
+        # Mapping from current cluster labels to overlapping previous IDs
+        overlaps_with_prev = defaultdict(list)
+
         for label in cluster_labels:
             cluster_mask = final_labeled_regions == label
             mcs_detected[cluster_mask] = 1
+
+            # Calculate area
+            area = np.sum(cluster_mask) * grid_cell_area_km2
 
             if previous_labeled_regions is None:
                 # First time step, assign new IDs
@@ -119,7 +154,6 @@ def track_mcs(
                 # Initialize lifetime
                 lifetime_dict[next_cluster_id] = 1
                 # Calculate area
-                area = np.sum(cluster_mask) * grid_cell_area_km2
                 max_area_dict[next_cluster_id] = area
                 mcs_lifetime[cluster_mask] = lifetime_dict[next_cluster_id]
                 next_cluster_id += 1
@@ -142,7 +176,7 @@ def track_mcs(
                             overlap_area[prev_id] = overlap_percentage
 
                 if len(overlap_area) == 1:
-                    # Single overlap, assign existing ID
+                    # Continuation, assign existing ID
                     assigned_id = list(overlap_area.keys())[0]
                     mcs_id[cluster_mask] = assigned_id
                     current_cluster_ids[label] = assigned_id
@@ -159,39 +193,53 @@ def track_mcs(
                     current_cluster_ids[label] = next_cluster_id
                     # Initialize lifetime
                     lifetime_dict[next_cluster_id] = 1
-                    # Calculate area
-                    area = np.sum(cluster_mask) * grid_cell_area_km2
                     max_area_dict[next_cluster_id] = area
                     mcs_lifetime[cluster_mask] = lifetime_dict[next_cluster_id]
                     next_cluster_id += 1
                 else:
-                    # Splitting or merging event
+                    # Merging or splitting event
                     prev_ids = list(overlap_area.keys())
-                    if len(prev_ids) == 1:
-                        # Splitting event
-                        assigned_id = prev_ids[0]
-                        mcs_id[cluster_mask] = assigned_id
-                        current_cluster_ids[label] = assigned_id
-                        # Update lifetime
-                        lifetime_dict[assigned_id] += 1
-                        mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
-                        # Update max area
-                        area = np.sum(cluster_mask) * grid_cell_area_km2
-                        if area > max_area_dict[assigned_id]:
-                            max_area_dict[assigned_id] = area
-                    else:
+                    if len(prev_ids) > 1:
                         # Merging event
-                        # Assign the ID of the cluster with the largest overlap
-                        assigned_id = max(overlap_area, key=overlap_area.get)
+                        assigned_id = next_cluster_id
+                        next_cluster_id += 1
                         mcs_id[cluster_mask] = assigned_id
                         current_cluster_ids[label] = assigned_id
-                        # Update lifetime
-                        lifetime_dict[assigned_id] += 1
+                        # Initialize lifetime
+                        lifetime_dict[assigned_id] = 1
+                        max_area_dict[assigned_id] = area
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
-                        # Update max area
-                        area = np.sum(cluster_mask) * grid_cell_area_km2
-                        if area > max_area_dict[assigned_id]:
-                            max_area_dict[assigned_id] = area
+                        # Record merging event
+                        merge_event = MergingEvent(
+                            time=current_time,
+                            parent_ids=prev_ids,
+                            child_id=assigned_id,
+                            area=area
+                        )
+                        merging_events.append(merge_event)
+                    elif len(prev_ids) == 1:
+                        # Splitting event
+                        parent_id = prev_ids[0]
+                        # Assign new ID to the current cluster
+                        assigned_id = next_cluster_id
+                        next_cluster_id += 1
+                        mcs_id[cluster_mask] = assigned_id
+                        current_cluster_ids[label] = assigned_id
+                        # Initialize lifetime
+                        lifetime_dict[assigned_id] = 1
+                        max_area_dict[assigned_id] = area
+                        mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+                        # Record splitting event
+                        split_event = SplittingEvent(
+                            time=current_time,
+                            parent_id=parent_id,
+                            child_ids=[assigned_id],
+                            area=area
+                        )
+                        splitting_events.append(split_event)
+                    else:
+                        # Should not reach here
+                        warnings.warn(f"Unexpected case at time {current_time}.")
 
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
