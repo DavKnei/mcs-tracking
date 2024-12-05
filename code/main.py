@@ -8,25 +8,34 @@ import xarray as xr
 from detection import detect_mcs_in_file
 from tracking import track_mcs, filter_main_mcs
 from plot import save_detection_plot, save_intermediate_plots
-from input_output import save_detection_results, load_detection_results, save_tracking_results_to_netcdf
+from input_output import (
+    save_detection_results,
+    load_detection_results,
+    save_tracking_results_to_netcdf,
+)
 
 # Define a function for parallel processing
 def process_file(file_path):
     result = detect_mcs_in_file(file_path)
     return result
 
+
 def main():
     # Directory containing NetCDF files
     data_directory = "/nas/home/dkn/Desktop/PyFLEXTRKR_WRF_ref/WRF_test/WRF_test_data/wrf_rainrate_processed/"
 
     output_path = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/"
-    output_plot_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
-    tracking_output_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/tracking_results/"
+    output_plot_dir = (
+        "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
+    )
+    tracking_output_dir = (
+        "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/tracking_results/"
+    )
 
-    detection_results_file = os.path.join(output_path, 'detection_results.nc')
+    detection_results_file = os.path.join(output_path, "detection_results.nc")
 
     # List all NetCDF files in the directory
-    file_list = sorted(glob.glob(os.path.join(data_directory, '*.nc')))
+    file_list = sorted(glob.glob(os.path.join(data_directory, "*.nc")))
 
     # List to hold detection results
     detection_results = []
@@ -52,13 +61,19 @@ def main():
             NUMBER_OF_CORES = 24  # Adjust based on your system
 
             # Use ProcessPoolExecutor for CPU-bound tasks
-            with concurrent.futures.ProcessPoolExecutor(max_workers=NUMBER_OF_CORES) as executor:
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=NUMBER_OF_CORES
+            ) as executor:
                 # Map the files to the process_file function
-                futures = [executor.submit(process_file, file_path) for file_path in file_list]
+                futures = [
+                    executor.submit(process_file, file_path) for file_path in file_list
+                ]
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
                     detection_results.append(detection_result)
-                    print(f"MCS detection completed for time {detection_result['time']}.")
+                    print(
+                        f"MCS detection completed for time {detection_result['time']}."
+                    )
         else:
             # Process files sequentially
             for file_path in file_list:
@@ -69,8 +84,8 @@ def main():
                     save_intermediate_plots(detection_result, output_plot_dir)
 
         # Sort detection results by time to ensure correct sequence
-        detection_results.sort(key=lambda x: x['time'])
-        print('Detection finished.')
+        detection_results.sort(key=lambda x: x["time"])
+        print("Detection finished.")
 
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
@@ -81,12 +96,16 @@ def main():
     # Now, generate and save plots before tracking
     if SAVE_PLOTS:
         for detection_result in detection_results:
-            final_labeled_regions = detection_result['final_labeled_regions']
-            prec = detection_result['precipitation']  # Ensure 'precipitation' is in detection_result
-            lat = detection_result['lat']
-            lon = detection_result['lon']
-            file_time = detection_result['time']
-            file_time_str = np.datetime_as_string(file_time, unit='h')  # Convert time to string format
+            final_labeled_regions = detection_result["final_labeled_regions"]
+            prec = detection_result[
+                "precipitation"
+            ]  # Ensure 'precipitation' is in detection_result
+            lat = detection_result["lat"]
+            lon = detection_result["lon"]
+            file_time = detection_result["time"]
+            file_time_str = np.datetime_as_string(
+                file_time, unit="h"
+            )  # Convert time to string format
 
             save_detection_plot(
                 lon=lon,
@@ -95,19 +114,51 @@ def main():
                 final_labeled_regions=final_labeled_regions,
                 file_time=file_time_str,
                 output_dir=output_plot_dir,
-                min_prec_threshold=0.1  # Minimum precipitation to plot in color
+                min_prec_threshold=0.1,  # Minimum precipitation to plot in color
             )
 
     # Perform tracking
-    print('Tracking of MCS...')
-    mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids = track_mcs(detection_results, main_lifetime_thresh=6)
-    print('Tracking of MCS finished.')
+    print("Tracking of MCS...")
+    (
+        mcs_detected_list,
+        mcs_id_list,
+        lifetime_list,
+        time_list,
+        lat,
+        lon,
+        main_mcs_ids,
+    ) = track_mcs(
+        detection_results,
+        main_lifetime_thresh=6,
+        main_area_thresh=10000,
+        grid_cell_area_km2=16,
+    )
+    print("Tracking of MCS finished.")
 
     # Optionally filter to main MCS
-    mcs_id_list_filtered = filter_main_mcs(mcs_id_list, main_mcs_ids)  # Optional maybe deactivate
+    def filter_main_mcs(mcs_id_list, main_mcs_ids):
+        filtered_mcs_id_list = []
+        for mcs_id_array in mcs_id_list:
+            # Create a copy to avoid modifying the original array
+            filtered_array = mcs_id_array.copy()
+            # Set IDs not in main_mcs_ids to zero
+            mask = ~np.isin(filtered_array, main_mcs_ids)
+            filtered_array[mask] = 0
+            filtered_mcs_id_list.append(filtered_array)
+        return filtered_mcs_id_list
+
+    mcs_id_list_filtered = filter_main_mcs(mcs_id_list, main_mcs_ids)
 
     # Save tracking results (use filtered lists if desired)
-    save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list_filtered, lifetime_list, time_list, lat, lon, tracking_output_dir)
+    save_tracking_results_to_netcdf(
+        mcs_detected_list,
+        mcs_id_list_filtered,
+        lifetime_list,
+        time_list,
+        lat,
+        lon,
+        tracking_output_dir,
+    )
 
 
 if __name__ == "__main__":

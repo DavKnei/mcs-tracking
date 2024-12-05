@@ -8,6 +8,7 @@ from skimage.segmentation import watershed
 from skimage.measure import regionprops, label
 from input_output import load_data
 
+
 def smooth_precipitation_field(precipitation, sigma=1):
     """
     Apply Gaussian smoothing to the precipitation field.
@@ -20,6 +21,7 @@ def smooth_precipitation_field(precipitation, sigma=1):
     - Smoothed precipitation field as a 2D array.
     """
     return gaussian_filter(precipitation, sigma=sigma)
+
 
 def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_size):
     """
@@ -40,7 +42,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
     coords = np.column_stack((lat_points, lon_points))
 
     # HDBSCAN with haversine metric
-    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric='haversine')
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric="haversine")
     clusterer.fit(np.radians(coords))
     labels = clusterer.labels_
 
@@ -49,6 +51,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
     labeled_array[precipitation_mask] = labels + 1  # Add 1 to make labels positive
 
     return labeled_array
+
 
 def identify_convective_plumes(precipitation, clusters, heavy_threshold):
     """
@@ -74,11 +77,7 @@ def identify_convective_plumes(precipitation, clusters, heavy_threshold):
             # Compute the distance transform
             distance = distance_transform_edt(heavy_mask)
             # Find local maxima
-            coordinates = peak_local_max(
-                distance,
-                labels=cluster_mask,
-                min_distance=3
-            )
+            coordinates = peak_local_max(distance, labels=cluster_mask, min_distance=3)
             if len(coordinates) == 0:
                 continue  # Skip if no peaks are found
             # Create markers array
@@ -93,7 +92,10 @@ def identify_convective_plumes(precipitation, clusters, heavy_threshold):
 
     return convective_plume_labels
 
-def filter_mcs_candidates(clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2):
+
+def filter_mcs_candidates(
+    clusters, convective_plumes, min_area_km2, min_plumes, grid_cell_area_km2
+):
     """
     Filter clusters to identify MCS candidates based on area and number of convective plumes.
 
@@ -121,6 +123,7 @@ def filter_mcs_candidates(clusters, convective_plumes, min_area_km2, min_plumes,
             mcs_candidate_labels.append(label_value)
 
     return mcs_candidate_labels
+
 
 def extract_shape_features(clusters, lat, lon, grid_spacing_km):
     """
@@ -152,37 +155,42 @@ def extract_shape_features(clusters, lat, lon, grid_spacing_km):
         props = props_list[0]  # There should be only one region in the mask
 
         # Extract features
-        area = props.area * (grid_spacing_km ** 2)  # Convert to km²
+        area = props.area * (grid_spacing_km**2)  # Convert to km²
         perimeter = props.perimeter * grid_spacing_km  # Convert to km
         major_axis_length = props.major_axis_length * grid_spacing_km
         minor_axis_length = props.minor_axis_length * grid_spacing_km
-        aspect_ratio = major_axis_length / minor_axis_length if minor_axis_length != 0 else np.nan
+        aspect_ratio = (
+            major_axis_length / minor_axis_length if minor_axis_length != 0 else np.nan
+        )
         orientation = props.orientation  # In radians
         solidity = props.solidity  # Convexity
         eccentricity = props.eccentricity  # Elongation measure
         extent = props.extent  # Ratio of area to bounding box area
-        convex_area = props.convex_area * (grid_spacing_km ** 2)
-        circularity = (4 * np.pi * area) / (perimeter ** 2) if perimeter != 0 else np.nan
+        convex_area = props.convex_area * (grid_spacing_km**2)
+        circularity = (
+            (4 * np.pi * area) / (perimeter**2) if perimeter != 0 else np.nan
+        )
 
         # Convert orientation to degrees and adjust range
         orientation_deg = np.degrees(orientation)
         orientation_deg = (orientation_deg + 360) % 360
 
         shape_features[label_value] = {
-            'area_km2': area,
-            'perimeter_km': perimeter,
-            'major_axis_length_km': major_axis_length,
-            'minor_axis_length_km': minor_axis_length,
-            'aspect_ratio': aspect_ratio,
-            'orientation_deg': orientation_deg,
-            'solidity': solidity,
-            'eccentricity': eccentricity,
-            'extent': extent,
-            'convex_area_km2': convex_area,
-            'circularity': circularity
+            "area_km2": area,
+            "perimeter_km": perimeter,
+            "major_axis_length_km": major_axis_length,
+            "minor_axis_length_km": minor_axis_length,
+            "aspect_ratio": aspect_ratio,
+            "orientation_deg": orientation_deg,
+            "solidity": solidity,
+            "eccentricity": eccentricity,
+            "extent": extent,
+            "convex_area_km2": convex_area,
+            "circularity": circularity,
         }
 
     return shape_features
+
 
 def classify_mcs_types(shape_features):
     """
@@ -197,26 +205,27 @@ def classify_mcs_types(shape_features):
     mcs_classification = {}
 
     for label_value, features in shape_features.items():
-        aspect_ratio = features['aspect_ratio']
-        area = features['area_km2']
-        circularity = features['circularity']
+        aspect_ratio = features["aspect_ratio"]
+        area = features["area_km2"]
+        circularity = features["circularity"]
 
         # Initialize type
-        mcs_type = 'Unclassified'
+        mcs_type = "Unclassified"
 
         # Classification rules
-        if aspect_ratio >= 5 and features['major_axis_length_km'] >= 100:
-            mcs_type = 'Squall Line'
+        if aspect_ratio >= 5 and features["major_axis_length_km"] >= 100:
+            mcs_type = "Squall Line"
         elif aspect_ratio <= 2 and area >= 100000 and circularity >= 0.7:
-            mcs_type = 'MCC'
+            mcs_type = "MCC"
         elif 2 <= aspect_ratio < 5:
-            mcs_type = 'Linear MCS'
+            mcs_type = "Linear MCS"
         else:
-            mcs_type = 'Other MCS'
+            mcs_type = "Other MCS"
 
         mcs_classification[label_value] = mcs_type
 
     return mcs_classification
+
 
 def detect_mcs_in_file(file_path, time_index=0):
     """
@@ -239,7 +248,7 @@ def detect_mcs_in_file(file_path, time_index=0):
     """
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, time_index)
-    
+
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
 
@@ -250,18 +259,20 @@ def detect_mcs_in_file(file_path, time_index=0):
     # Step 3: Cluster moderate precipitation points using HDBSCAN
     min_cluster_size = 50  # Minimum size of clusters
     cluster_selection_epsilon = 100  # km (Not used in this function)
-    
+
     clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_cluster_size)
-    
+
     # Step 4: Identify convective plumes within clusters
     heavy_threshold = 15  # mm
-    convective_plumes = identify_convective_plumes(precipitation_smooth, clusters, heavy_threshold)
+    convective_plumes = identify_convective_plumes(
+        precipitation_smooth, clusters, heavy_threshold
+    )
 
     # Step 5: Filter clusters based on area and plume criteria
-    min_area_km2 = 10000  # Adjust as needed
-    min_plumes = 2        # Adjust as needed
-    grid_spacing_km = 4   # km
-    grid_cell_area_km2 = grid_spacing_km ** 2
+    min_area_km2 = 5000  # minimum threshold for all features to detect (should be smaller than min MCS size)
+    min_plumes = 2  # Adjust as needed
+    grid_spacing_km = 4  # km
+    grid_cell_area_km2 = grid_spacing_km**2
 
     # Step 6: Filter MCS candidates based on number of convective plumes and area
     mcs_candidate_labels = filter_mcs_candidates(
@@ -269,26 +280,30 @@ def detect_mcs_in_file(file_path, time_index=0):
     )
 
     # Create final labeled regions for MCS candidates
-    final_labeled_regions = np.where(np.isin(clusters, mcs_candidate_labels), clusters, 0)
+    final_labeled_regions = np.where(
+        np.isin(clusters, mcs_candidate_labels), clusters, 0
+    )
 
     # Step 7: Extract shape features from clusters
-    shape_features = extract_shape_features(final_labeled_regions, lat, lon, grid_spacing_km)
+    shape_features = extract_shape_features(
+        final_labeled_regions, lat, lon, grid_spacing_km
+    )
 
     # Step 8: Classify MCS types
     mcs_classification = classify_mcs_types(shape_features)
-    
+
     # Prepare detection result
     detection_result = {
-        'file_path': file_path,
-        'moderate_prec_clusters': clusters,
-        'final_labeled_regions': final_labeled_regions,
-        'lat': lat,
-        'lon': lon,
-        'precipitation': precipitation_smooth,
-        'time': ds['time'].values,
-        'convective_plumes': convective_plumes,
-        'shape_features': shape_features,
-        'mcs_classification': mcs_classification
+        "file_path": file_path,
+        "moderate_prec_clusters": clusters,
+        "final_labeled_regions": final_labeled_regions,
+        "lat": lat,
+        "lon": lon,
+        "precipitation": precipitation_smooth,
+        "time": ds["time"].values,
+        "convective_plumes": convective_plumes,
+        "shape_features": shape_features,
+        "mcs_classification": mcs_classification,
     }
 
     return detection_result

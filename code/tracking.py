@@ -4,6 +4,7 @@ import warnings
 import datetime
 import xarray as xr
 
+
 def handle_splitting_event(overlap_area, next_cluster_id):
     """
     Handle splitting events where one previous cluster overlaps with multiple current clusters.
@@ -23,6 +24,7 @@ def handle_splitting_event(overlap_area, next_cluster_id):
         next_cluster_id += 1
     return current_cluster_ids, next_cluster_id
 
+
 def handle_merging_event(overlap_area, previous_cluster_ids):
     """
     Handle merging events where multiple previous clusters overlap with one current cluster.
@@ -38,6 +40,7 @@ def handle_merging_event(overlap_area, previous_cluster_ids):
     # Here, we assign a new unique ID
     assigned_id = min(overlap_area.keys())  # Or use next_cluster_id to assign a new ID
     return assigned_id
+
 
 def filter_main_mcs(mcs_id_list, main_mcs_ids):
     """
@@ -61,7 +64,12 @@ def filter_main_mcs(mcs_id_list, main_mcs_ids):
     return filtered_mcs_id_list
 
 
-def track_mcs(detection_results, main_lifetime_thresh=6):
+def track_mcs(
+    detection_results,
+    main_lifetime_thresh=6,
+    main_area_thresh=10000,
+    grid_cell_area_km2=16,
+):
     """
     Track MCSs across time steps using detection results.
      Returns mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids.
@@ -79,12 +87,13 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
 
     # Dictionary to keep track of the lifetime for each MCS ID
     lifetime_dict = {}
+    max_area_dict = {}
 
     for detection_result in detection_results:
-        final_labeled_regions = detection_result['final_labeled_regions']
-        current_time = detection_result['time']
-        current_lat = detection_result['lat']
-        current_lon = detection_result['lon']
+        final_labeled_regions = detection_result["final_labeled_regions"]
+        current_time = detection_result["time"]
+        current_lat = detection_result["lat"]
+        current_lon = detection_result["lon"]
 
         if lat is None:
             lat = current_lat
@@ -93,7 +102,7 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
         mcs_detected = np.zeros_like(final_labeled_regions, dtype=np.int8)
         mcs_id = np.zeros_like(final_labeled_regions, dtype=np.int32)
         mcs_lifetime = np.zeros_like(final_labeled_regions, dtype=np.int32)
-        
+
         current_cluster_ids = {}
 
         cluster_labels = np.unique(final_labeled_regions)
@@ -109,6 +118,9 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
                 current_cluster_ids[label] = next_cluster_id
                 # Initialize lifetime
                 lifetime_dict[next_cluster_id] = 1
+                # Calculate area
+                area = np.sum(cluster_mask) * grid_cell_area_km2
+                max_area_dict[next_cluster_id] = area
                 mcs_lifetime[cluster_mask] = lifetime_dict[next_cluster_id]
                 next_cluster_id += 1
             else:
@@ -121,8 +133,12 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
                     if overlap_cells > 0:
                         # Calculate overlap percentage relative to current cluster
                         current_cluster_area = np.sum(cluster_mask)
-                        overlap_percentage = (overlap_cells / current_cluster_area) * 100
-                        if overlap_percentage >= 10:  # 10% threshold overlap to merge  # TODO: put this in a config file
+                        overlap_percentage = (
+                            overlap_cells / current_cluster_area
+                        ) * 100
+                        if (
+                            overlap_percentage >= 10
+                        ):  # 10% threshold overlap to merge  # TODO: put this in a config file
                             overlap_area[prev_id] = overlap_percentage
 
                 if len(overlap_area) == 1:
@@ -133,12 +149,19 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
                     # Update lifetime
                     lifetime_dict[assigned_id] += 1
                     mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+                    # Update max area
+                    area = np.sum(cluster_mask) * grid_cell_area_km2
+                    if area > max_area_dict[assigned_id]:
+                        max_area_dict[assigned_id] = area
                 elif len(overlap_area) == 0:
                     # New initation, assign new ID and lifetime
                     mcs_id[cluster_mask] = next_cluster_id
                     current_cluster_ids[label] = next_cluster_id
                     # Initialize lifetime
                     lifetime_dict[next_cluster_id] = 1
+                    # Calculate area
+                    area = np.sum(cluster_mask) * grid_cell_area_km2
+                    max_area_dict[next_cluster_id] = area
                     mcs_lifetime[cluster_mask] = lifetime_dict[next_cluster_id]
                     next_cluster_id += 1
                 else:
@@ -152,6 +175,10 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
                         # Update lifetime
                         lifetime_dict[assigned_id] += 1
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+                        # Update max area
+                        area = np.sum(cluster_mask) * grid_cell_area_km2
+                        if area > max_area_dict[assigned_id]:
+                            max_area_dict[assigned_id] = area
                     else:
                         # Merging event
                         # Assign the ID of the cluster with the largest overlap
@@ -161,6 +188,10 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
                         # Update lifetime
                         lifetime_dict[assigned_id] += 1
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+                        # Update max area
+                        area = np.sum(cluster_mask) * grid_cell_area_km2
+                        if area > max_area_dict[assigned_id]:
+                            max_area_dict[assigned_id] = area
 
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
@@ -172,17 +203,22 @@ def track_mcs(detection_results, main_lifetime_thresh=6):
         lifetime_list.append(mcs_lifetime)
         time_list.append(current_time)
 
-        # Calculate total lifetime for each MCS ID
-        total_lifetime_dict = {}
+        total_lifetime_dict = lifetime_dict  # Already calculated during tracking
 
-        for mcs_id_array in mcs_id_list:
-            unique_ids = np.unique(mcs_id_array)
-            unique_ids = unique_ids[unique_ids != 0]  # Exclude background
-            for uid in unique_ids:
-                total_lifetime_dict[uid] = total_lifetime_dict.get(uid, 0) + 1
+        # Identify main MCS IDs based on lifetime and area thresholds
+        main_mcs_ids = [
+            uid
+            for uid in total_lifetime_dict.keys()
+            if total_lifetime_dict[uid] >= main_lifetime_thresh
+            and max_area_dict.get(uid, 0) >= main_area_thresh
+        ]
 
-        # Identify main MCS IDs based on lifetime threshold
-        main_mcs_ids = [uid for uid, life in total_lifetime_dict.items() if life >= main_lifetime_thresh]
-
-
-    return mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids
+    return (
+        mcs_detected_list,
+        mcs_id_list,
+        lifetime_list,
+        time_list,
+        lat,
+        lon,
+        main_mcs_ids,
+    )
