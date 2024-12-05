@@ -12,14 +12,17 @@ class MergingEvent:
     time: datetime.datetime
     parent_ids: List[int]
     child_id: int
-    area: float  # Area of the merged cluster
+    parent_areas: List[float]
+    child_area: float
 
 @dataclass
 class SplittingEvent:
     time: datetime.datetime
     parent_id: int
     child_ids: List[int]
-    area: float  # Area of the original cluster
+    parent_area: float
+    child_areas: List[float]
+
 
 def handle_splitting_event(overlap_area, next_cluster_id):
     """
@@ -209,18 +212,20 @@ def track_mcs(
                         lifetime_dict[assigned_id] = 1
                         max_area_dict[assigned_id] = area
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+                        # Get areas of parent tracks
+                        parent_areas = [max_area_dict[pid] for pid in prev_ids]
                         # Record merging event
                         merge_event = MergingEvent(
                             time=current_time,
                             parent_ids=prev_ids,
                             child_id=assigned_id,
-                            area=area
+                            parent_areas=parent_areas,
+                            child_area=area
                         )
                         merging_events.append(merge_event)
-                    elif len(prev_ids) == 1:
+                    elif len(prev_ids) == 1 and len(overlaps_with_prev[label]) > 1:
                         # Splitting event
                         parent_id = prev_ids[0]
-                        # Assign new ID to the current cluster
                         assigned_id = next_cluster_id
                         next_cluster_id += 1
                         mcs_id[cluster_mask] = assigned_id
@@ -229,12 +234,15 @@ def track_mcs(
                         lifetime_dict[assigned_id] = 1
                         max_area_dict[assigned_id] = area
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+                        # Get area of parent track
+                        parent_area = max_area_dict[parent_id]
                         # Record splitting event
                         split_event = SplittingEvent(
                             time=current_time,
                             parent_id=parent_id,
                             child_ids=[assigned_id],
-                            area=area
+                            parent_area=parent_area,
+                            child_areas=[area]
                         )
                         splitting_events.append(split_event)
                     else:
