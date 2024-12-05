@@ -141,7 +141,7 @@ def main():
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
         print("Detection finished.")
-
+        
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
     else:
@@ -182,11 +182,14 @@ def main():
         lat,
         lon,
         main_mcs_ids,
+        merging_events,
+        splitting_events,
     ) = track_mcs(
         detection_results,
         main_lifetime_thresh=6,
         main_area_thresh=10000,
         grid_cell_area_km2=16,
+        nmaxmerge=5,
     )
     print("Tracking of MCS finished.")
 
