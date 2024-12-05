@@ -6,7 +6,7 @@ import concurrent.futures
 import numpy as np
 import xarray as xr
 from detection import detect_mcs_in_file
-from tracking import track_mcs
+from tracking import track_mcs, filter_main_mcs
 from plot import save_detection_plot, save_intermediate_plots
 from input_output import save_detection_results, load_detection_results, save_tracking_results_to_netcdf
 
@@ -21,6 +21,7 @@ def main():
 
     output_path = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/"
     output_plot_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
+    tracking_output_dir = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/tracking_results/"
 
     detection_results_file = os.path.join(output_path, 'detection_results.nc')
 
@@ -99,12 +100,15 @@ def main():
 
     # Perform tracking
     print('Tracking of MCS...')
-    mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon = track_mcs(detection_results)
+    mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids = track_mcs(detection_results, main_lifetime_thresh=6)
     print('Tracking of MCS finished.')
 
-    # Save tracking results to NetCDF
-    tracking_output_dir = os.path.join(output_path, 'tracking_results')
-    save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, tracking_output_dir)
+    # Optionally filter to main MCS
+    mcs_id_list_filtered = filter_main_mcs(mcs_id_list, main_mcs_ids)  # Optional maybe deactivate
+
+    # Save tracking results (use filtered lists if desired)
+    save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list_filtered, lifetime_list, time_list, lat, lon, tracking_output_dir)
+
 
 if __name__ == "__main__":
     main()

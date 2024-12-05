@@ -39,10 +39,32 @@ def handle_merging_event(overlap_area, previous_cluster_ids):
     assigned_id = min(overlap_area.keys())  # Or use next_cluster_id to assign a new ID
     return assigned_id
 
-def track_mcs(detection_results):
+def filter_main_mcs(mcs_id_list, main_mcs_ids):
+    """
+    Filter tracking results to include only main MCS tracks.
+
+    Parameters:
+    - mcs_id_list: List of MCS ID arrays.
+    - main_mcs_ids: List of MCS IDs identified as main MCS.
+
+    Returns:
+    - filtered_mcs_id_list: List of MCS ID arrays with only main MCS IDs.
+    """
+    filtered_mcs_id_list = []
+    for mcs_id_array in mcs_id_list:
+        # Create a copy to avoid modifying the original array
+        filtered_array = mcs_id_array.copy()
+        # Set IDs not in main_mcs_ids to zero
+        mask = ~np.isin(filtered_array, main_mcs_ids)
+        filtered_array[mask] = 0
+        filtered_mcs_id_list.append(filtered_array)
+    return filtered_mcs_id_list
+
+
+def track_mcs(detection_results, main_lifetime_thresh=6):
     """
     Track MCSs across time steps using detection results.
-    Returns mcs_detected_list, mcs_id_list, time_list, lat, lon.
+     Returns mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids.
     """
     previous_labeled_regions = None
     previous_cluster_ids = {}
@@ -121,8 +143,8 @@ def track_mcs(detection_results):
                     next_cluster_id += 1
                 else:
                     # Splitting or merging event
-                    prev_id = list(overlap_area.keys())
-                    if len(prev_id) == 1:
+                    prev_ids = list(overlap_area.keys())
+                    if len(prev_ids) == 1:
                         # Splitting event
                         assigned_id = prev_ids[0]
                         mcs_id[cluster_mask] = assigned_id
@@ -150,4 +172,17 @@ def track_mcs(detection_results):
         lifetime_list.append(mcs_lifetime)
         time_list.append(current_time)
 
-    return mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon
+        # Calculate total lifetime for each MCS ID
+        total_lifetime_dict = {}
+
+        for mcs_id_array in mcs_id_list:
+            unique_ids = np.unique(mcs_id_array)
+            unique_ids = unique_ids[unique_ids != 0]  # Exclude background
+            for uid in unique_ids:
+                total_lifetime_dict[uid] = total_lifetime_dict.get(uid, 0) + 1
+
+        # Identify main MCS IDs based on lifetime threshold
+        main_mcs_ids = [uid for uid, life in total_lifetime_dict.items() if life >= main_lifetime_thresh]
+
+
+    return mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, main_mcs_ids
