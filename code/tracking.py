@@ -70,7 +70,7 @@ def track_mcs(detection_results):
 
         mcs_detected = np.zeros_like(final_labeled_regions, dtype=np.int8)
         mcs_id = np.zeros_like(final_labeled_regions, dtype=np.int32)
-        mcs_liftetime = np.zeros_like(final_labeled_regions, dtype=np.int32)
+        mcs_lifetime = np.zeros_like(final_labeled_regions, dtype=np.int32)
         
         current_cluster_ids = {}
 
@@ -87,7 +87,7 @@ def track_mcs(detection_results):
                 current_cluster_ids[label] = next_cluster_id
                 # Initialize lifetime
                 lifetime_dict[next_cluster_id] = 1
-                mcs_liftetime[cluster_mask] = lifetime_dict[next_cluster_id]
+                mcs_lifetime[cluster_mask] = lifetime_dict[next_cluster_id]
                 next_cluster_id += 1
             else:
                 # Compare with previous clusters
@@ -110,7 +110,7 @@ def track_mcs(detection_results):
                     current_cluster_ids[label] = assigned_id
                     # Update lifetime
                     lifetime_dict[assigned_id] += 1
-                    mcs_liftetime[cluster_mask] = lifetime_dict[assigned_id]
+                    mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
                 elif len(overlap_area) == 0:
                     # New initation, assign new ID and lifetime
                     mcs_id[cluster_mask] = next_cluster_id
@@ -147,7 +147,7 @@ def track_mcs(detection_results):
         # Append results
         mcs_detected_list.append(mcs_detected)
         mcs_id_list.append(mcs_id)
-        lifetime_list.append(mcs_liftetime)
+        lifetime_list.append(mcs_lifetime)
         time_list.append(current_time)
 
     return mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon
