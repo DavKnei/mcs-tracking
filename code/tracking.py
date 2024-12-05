@@ -143,6 +143,9 @@ def track_mcs(
         # Mapping from current cluster labels to overlapping previous IDs
         overlaps_with_prev = defaultdict(list)
 
+        # Mapping from previous cluster IDs to overlapping current labels
+        overlaps_with_curr = defaultdict(list)
+
         for label in cluster_labels:
             cluster_mask = final_labeled_regions == label
             mcs_detected[cluster_mask] = 1
@@ -170,13 +173,11 @@ def track_mcs(
                     if overlap_cells > 0:
                         # Calculate overlap percentage relative to current cluster
                         current_cluster_area = np.sum(cluster_mask)
-                        overlap_percentage = (
-                            overlap_cells / current_cluster_area
-                        ) * 100
-                        if (
-                            overlap_percentage >= 10
-                        ):  # 10% threshold overlap to merge  # TODO: put this in a config file
+                        overlap_percentage = (overlap_cells / current_cluster_area) * 100
+                        if overlap_percentage >= 10:
                             overlap_area[prev_id] = overlap_percentage
+                            overlaps_with_prev[label].append(prev_id)
+                            overlaps_with_curr[prev_id].append(label)
 
                 if len(overlap_area) == 1:
                     # Continuation, assign existing ID
@@ -248,6 +249,26 @@ def track_mcs(
                     else:
                         # Should not reach here
                         warnings.warn(f"Unexpected case at time {current_time}.")
+
+        for prev_id, curr_labels in overlaps_with_curr.items():
+            if len(curr_labels) > 1:
+                # Splitting event detected
+                parent_id = prev_id
+                child_ids = []
+                child_areas = []
+                for label in curr_labels:
+                    assigned_id = current_cluster_ids[label]
+                    child_ids.append(assigned_id)
+                    child_areas.append(max_area_dict[assigned_id])
+                parent_area = max_area_dict[parent_id]
+                split_event = SplittingEvent(
+                    time=current_time,
+                    parent_id=parent_id,
+                    child_ids=child_ids,
+                    parent_area=parent_area,
+                    child_areas=child_areas
+                )
+                splitting_events.append(split_event)
 
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
