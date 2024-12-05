@@ -23,6 +23,21 @@ def handle_splitting_event(overlap_area, next_cluster_id):
         next_cluster_id += 1
     return current_cluster_ids, next_cluster_id
 
+def handle_merging_event(overlap_area, previous_cluster_ids):
+    """
+    Handle merging events where multiple previous clusters overlap with one current cluster.
+
+    Parameters:
+    - overlap_area: Dictionary mapping previous cluster IDs to overlap percentages.
+    - previous_cluster_ids: Dictionary mapping previous cluster labels to cluster IDs.
+
+    Returns:
+    - assigned_id: Cluster ID assigned to the merged cluster.
+    """
+    # For merging, you might choose to assign a new ID or keep one of the existing IDs
+    # Here, we assign a new unique ID
+    assigned_id = min(overlap_area.keys())  # Or use next_cluster_id to assign a new ID
+    return assigned_id
 
 def track_mcs(detection_results):
     """
@@ -99,13 +114,13 @@ def track_mcs(detection_results):
                             overlap_area, next_cluster_id)
                         mcs_id[cluster_mask] = splitting_ids[label]
                         current_cluster_ids[label] = splitting_ids[label]
+                        warnings.warn(f"Splitting event detected at time {current_time}. Assigned new IDs.")
                     else:
-                    # Merging events
-                        warnings.warn(f"Merging not yet implemented but found at time {current_time}.")
-                        # For now, assign the ID of the cluster with the largest overlap
-                        assigned_id = max(overlap_area, key=overlap_area.get)
+                        # Merging event
+                        assigned_id = handle_merging_event(overlap_area, previous_cluster_ids)
                         mcs_id[cluster_mask] = assigned_id
                         current_cluster_ids[label] = assigned_id
+                        warnings.warn(f"Merging event detected at time {current_time}. Assigned ID {assigned_id}.")
 
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
