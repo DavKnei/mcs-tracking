@@ -99,12 +99,12 @@ def main():
 
     # Perform tracking
     print('Tracking of MCS...')
-    mcs_detected_list, mcs_id_list, time_list, lat, lon = track_mcs(detection_results)
+    mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon = track_mcs(detection_results)
     print('Tracking of MCS finished.')
 
     # Save tracking results to NetCDF
     tracking_output_dir = os.path.join(output_path, 'tracking_results')
-    save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, lat, lon, tracking_output_dir)
+    save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, tracking_output_dir)
 
 if __name__ == "__main__":
     main()

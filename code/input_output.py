@@ -114,7 +114,7 @@ def load_detection_results(input_filepath):
     print(f"Detection results loaded from {input_filepath}")
     return detection_results
 
-def save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, lat, lon, output_dir):
+def save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, output_dir):
     """
     Save tracking results to a NetCDF file.
 
@@ -132,12 +132,14 @@ def save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, l
     # Stack the mcs_detected_list and mcs_id_list along the time dimension
     mcs_detected_all = np.stack(mcs_detected_list, axis=0)  # Shape: (time, y, x)
     mcs_id_all = np.stack(mcs_id_list, axis=0)              # Shape: (time, y, x)
-
+    lifetime_all = np.stack(lifetime_list, axis=0)          # Shape: (time, y, x)
+    
     # Create an xarray Dataset
     ds = xr.Dataset(
         {
             'mcs_detected': (['time', 'y', 'x'], mcs_detected_all),
-            'mcs_id': (['time', 'y', 'x'], mcs_id_all)
+            'mcs_id': (['time', 'y', 'x'], mcs_id_all),
+            'lifetime': (['time', 'y', 'x'], lifetime_all)
         },
         coords={
             'time': time_list,
@@ -151,6 +153,7 @@ def save_tracking_results_to_netcdf(mcs_detected_list, mcs_id_list, time_list, l
     # Set attributes
     ds['mcs_detected'].attrs['description'] = 'Binary mask of detected MCSs'
     ds['mcs_id'].attrs['description'] = 'Unique IDs of tracked MCSs'
+    ds['lifetime'].attrs['description'] = 'Lifetime of MCSs in time steps'
     ds['lat'].attrs['description'] = 'Latitude coordinate'
     ds['lon'].attrs['description'] = 'Longitude coordinate'
     ds.attrs['title'] = 'MCS Tracking Results'
