@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import List
 from collections import defaultdict
 
+
 @dataclass
 class MergingEvent:
     time: datetime.datetime
@@ -14,6 +15,7 @@ class MergingEvent:
     child_id: int
     parent_areas: List[float]
     child_area: float
+
 
 @dataclass
 class SplittingEvent:
@@ -85,23 +87,31 @@ def filter_main_mcs(mcs_id_list, main_mcs_ids):
 
 def track_mcs(
     detection_results,
-    main_lifetime_thresh=6,
-    main_area_thresh=10000,
-    grid_cell_area_km2=16,
+    main_lifetime_thresh,
+    main_area_thresh,
+    grid_cell_area_km2,
+    nmaxmerge,
 ):
     """
     Track MCSs across time steps using detection results.
 
+    Parameters:
+    - detection_results: List of dictionaries containing detection results.
+    - main_lifetime_thresh: Minimum lifetime threshold for main MCSs.
+    - main_area_thresh: Minimum area threshold for main MCSs.
+    - grid_cell_area_km2: Area of each grid cell in square kilometers.
+    - nmaxmerge: Maximum number of clusters to merge or split.
+
     Returns:
-    - mcs_detected_list
-    - mcs_id_list
-    - lifetime_list
-    - time_list
-    - lat
-    - lon
-    - main_mcs_ids
-    - merging_events
-    - splitting_events
+    - mcs_detected_list: List of binary arrays indicating detected MCSs.
+    - mcs_id_list: List of arrays with MCS IDs assigned.
+    - lifetime_list: List of arrays indicating the lifetime of MCSs.
+    - time_list: List of time stamps corresponding to each time step.
+    - lat: Latitude array.
+    - lon: Longitude array.
+    - main_mcs_ids: List of MCS IDs identified as main MCSs.
+    - merging_events: List of MergingEvent instances.
+    - splitting_events: List of SplittingEvent instances.
     """
     previous_labeled_regions = None
     previous_cluster_ids = {}
@@ -173,7 +183,9 @@ def track_mcs(
                     if overlap_cells > 0:
                         # Calculate overlap percentage relative to current cluster
                         current_cluster_area = np.sum(cluster_mask)
-                        overlap_percentage = (overlap_cells / current_cluster_area) * 100
+                        overlap_percentage = (
+                            overlap_cells / current_cluster_area
+                        ) * 100
                         if overlap_percentage >= 10:
                             overlap_area[prev_id] = overlap_percentage
                             overlaps_with_prev[label].append(prev_id)
@@ -215,15 +227,24 @@ def track_mcs(
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
                         # Get areas of parent tracks
                         parent_areas = [max_area_dict[pid] for pid in prev_ids]
+                        # Limit number of mergers
+                        if len(prev_ids) > nmaxmerge:
+                            # Trim the list and issue a warning
+                            prev_ids = prev_ids[:nmaxmerge]
+                            parent_areas = parent_areas[:nmaxmerge]
+                            warnings.warn(
+                                f"Number of merging clusters exceeds nmaxmerge ({nmaxmerge}) at time {current_time}."
+                            )
                         # Record merging event
                         merge_event = MergingEvent(
                             time=current_time,
                             parent_ids=prev_ids,
                             child_id=assigned_id,
                             parent_areas=parent_areas,
-                            child_area=area
+                            child_area=area,
                         )
                         merging_events.append(merge_event)
+
                     elif len(prev_ids) == 1 and len(overlaps_with_prev[label]) > 1:
                         # Splitting event
                         parent_id = prev_ids[0]
@@ -243,7 +264,7 @@ def track_mcs(
                             parent_id=parent_id,
                             child_ids=[assigned_id],
                             parent_area=parent_area,
-                            child_areas=[area]
+                            child_areas=[area],
                         )
                         splitting_events.append(split_event)
                     else:
@@ -261,12 +282,19 @@ def track_mcs(
                     child_ids.append(assigned_id)
                     child_areas.append(max_area_dict[assigned_id])
                 parent_area = max_area_dict[parent_id]
+                # Limit number of splitters
+                if len(child_ids) > nmaxmerge:
+                    child_ids = child_ids[:nmaxmerge]
+                    child_areas = child_areas[:nmaxmerge]
+                    warnings.warn(
+                        f"Number of splitting clusters exceeds nmaxmerge ({nmaxmerge}) at time {current_time}."
+                    )
                 split_event = SplittingEvent(
                     time=current_time,
                     parent_id=parent_id,
                     child_ids=child_ids,
                     parent_area=parent_area,
-                    child_areas=child_areas
+                    child_areas=child_areas,
                 )
                 splitting_events.append(split_event)
 
@@ -298,4 +326,6 @@ def track_mcs(
         lat,
         lon,
         main_mcs_ids,
+        merging_events,
+        splitting_events,
     )

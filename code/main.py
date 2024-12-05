@@ -22,14 +22,14 @@ def process_file(file_path):
 
 def main():
     # Directory containing NetCDF files
-    data_directory = "/nas/home/dkn/Desktop/PyFLEXTRKR_WRF_ref/WRF_test/WRF_test_data/wrf_rainrate_processed/"
+    data_directory = "/home/david/Schreibtisch/mcs-tracking/data/wrf_test/wrf_data/"
 
-    output_path = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/"
+    output_path = "/home/david/Schreibtisch/mcs-tracking/data/wrf_test/"
     output_plot_dir = (
-        "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
+        "/home/david/Schreibtisch/mcs-tracking/data/data/wrf_test/figures/"
     )
     tracking_output_dir = (
-        "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/tracking_results/"
+        "/home/david/Schreibtisch/mcs-tracking/data/wrf_test/tracking_results/"
     )
 
     detection_results_file = os.path.join(output_path, "detection_results.nc")
@@ -86,7 +86,7 @@ def main():
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
         print("Detection finished.")
-
+        
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
     else:
@@ -127,11 +127,14 @@ def main():
         lat,
         lon,
         main_mcs_ids,
+        merging_events,
+        splitting_events,
     ) = track_mcs(
         detection_results,
         main_lifetime_thresh=6,
         main_area_thresh=10000,
         grid_cell_area_km2=16,
+        nmaxmerge=5,
     )
     print("Tracking of MCS finished.")
 
