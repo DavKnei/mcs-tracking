@@ -3,6 +3,7 @@
 import os
 import glob
 import concurrent.futures
+import argparse
 import numpy as np
 import xarray as xr
 from detection import detect_mcs_in_file
@@ -19,18 +20,44 @@ def process_file(file_path):
     result = detect_mcs_in_file(file_path)
     return result
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='MCS Detection and Tracking')
+    parser.add_argument('--config', type=str, help='Path to configuration file', required=True)
+    return parser.parse_args()
 
 def main():
-    # Directory containing NetCDF files
-    data_directory = "/nas/home/dkn/Desktop/PyFLEXTRKR_WRF_ref/WRF_test/WRF_test_data/wrf_rainrate_processed/"
-
-    output_path = "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/"
-    output_plot_dir = (
-        "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/figures/hdbscan"
-    )
-    tracking_output_dir = (
-        "/nas/home/dkn/Desktop/MCS-tracking/output_data/wrf_test/tracking_results/"
-    )
+     # Parse command-line arguments
+    args = parse_arguments()
+    
+    # Load the configuration file
+    config_path = args.config
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Access parameters from config
+    data_directory = config['data_directory']
+    output_path = config['output_path']
+    output_plot_dir = config['output_plot_dir']
+    tracking_output_dir = config['tracking_output_dir']
+    
+    # Detection parameters
+    min_size_threshold = config.get('min_size_threshold', 10)
+    heavy_precip_threshold = config.get('heavy_precip_threshold', 20.0)
+    moderate_precip_threshold = config.get('moderate_precip_threshold', 5.0)
+    
+    # Tracking parameters
+    main_lifetime_thresh = config.get('main_lifetime_thresh', 6)
+    main_area_thresh = config.get('main_area_thresh', 10000)
+    grid_cell_area_km2 = config.get('grid_cell_area_km2', 16)
+    nmaxmerge = config.get('nmaxmerge', 5)
+    
+    # Other parameters
+    plotting_enabled = config.get('plotting_enabled', True)
+    
+    # Ensure directories exist
+    os.makedirs(output_path, exist_ok=True)
+    os.makedirs(output_plot_dir, exist_ok=True)
+    os.makedirs(tracking_output_dir, exist_ok=True)
 
     detection_results_file = os.path.join(output_path, "detection_results.nc")
 
