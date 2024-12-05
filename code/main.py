@@ -114,7 +114,16 @@ def main():
             ) as executor:
                 # Map the files to the process_file function
                 futures = [
-                    executor.submit(process_file, file_path) for file_path in file_list
+                    executor.submit(
+                        process_file,
+                        file_path,
+                        heavy_precip_threshold,
+                        moderate_precip_threshold,
+                        min_size_threshold,
+                        min_nr_plumes,
+                        grid_spacing_km,
+                    )
+                    for file_path in file_list
                 ]
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
@@ -141,7 +150,7 @@ def main():
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
         print("Detection finished.")
-        
+
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
     else:
