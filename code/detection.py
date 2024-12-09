@@ -40,16 +40,20 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
     lat_points = latitudes[precipitation_mask]
     lon_points = longitudes[precipitation_mask]
     coords = np.column_stack((lat_points, lon_points))
-
-    # HDBSCAN with haversine metric
-    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric="haversine")
-    clusterer.fit(np.radians(coords))
-    labels = clusterer.labels_
+    
+    # Check if there are any points to cluster
+    if not np.any(precipitation_mask):
+        return np.full(precipitation_mask.shape, -1)
+    else:
+        # HDBSCAN with haversine metric
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric="haversine")
+        clusterer.fit(np.radians(coords))
+        labels = clusterer.labels_
 
     # Create labeled array
     labeled_array = np.full(precipitation_mask.shape, -1)
     labeled_array[precipitation_mask] = labels + 1  # Add 1 to make labels positive
-
+    
     return labeled_array
 
 
