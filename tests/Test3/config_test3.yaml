@@ -2,17 +2,17 @@
 
 
 # Data directories
-data_directory: "/home/david/Schreibtisch/mcs-tracking/tests/Test3/data/"
+data_directory: "./tests/Test3/data/"
 file_suffix: ".nc_test"
-output_path: "/home/david/Schreibtisch/mcs-tracking/tests/Test3/"
-output_plot_dir: "/home/david/Schreibtisch/mcs-tracking/tests/Test3/figures/"
-tracking_output_dir: "/home/david/Schreibtisch/mcs-tracking/tests/Test3/"
+output_path: "./tests/Test3/"
+output_plot_dir: "./tests/Test3/figures/"
+tracking_output_dir: "./tests/Test3/"
 grid_size_km: 4.0
 
 # Detection parametersS
 min_size_threshold: 10
 heavy_precip_threshold: 10.0
-moderate_precip_threshold: 5.0
+moderate_precip_threshold: 1.0
 min_nr_plumes: 1
 
 
@@ -24,3 +24,4 @@ nmaxmerge: 5
 
 # Other parameters
 plotting_enabled: True
+use_multiprocessing: False
