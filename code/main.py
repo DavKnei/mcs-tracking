@@ -177,18 +177,6 @@ def main():
     )
     print("Tracking of MCS finished.")
 
-    # Optionally filter to main MCS
-    def filter_main_mcs(mcs_id_list, main_mcs_ids):
-        filtered_mcs_id_list = []
-        for mcs_id_array in mcs_id_list:
-            # Create a copy to avoid modifying the original array
-            filtered_array = mcs_id_array.copy()
-            # Set IDs not in main_mcs_ids to zero
-            mask = ~np.isin(filtered_array, main_mcs_ids)
-            filtered_array[mask] = 0
-            filtered_mcs_id_list.append(filtered_array)
-        return filtered_mcs_id_list
-
     mcs_id_list_filtered = filter_main_mcs(mcs_id_list, main_mcs_ids)
 
     # Save tracking results (use filtered lists if desired)
