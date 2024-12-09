@@ -3,7 +3,10 @@ import xarray as xr
 import os
 from datetime import datetime, timedelta
 
-def create_circular_cell(pr_array, center_y, center_x, radius, heavy_prec, moderate_prec):
+
+def create_circular_cell(
+    pr_array, center_y, center_x, radius, heavy_prec, moderate_prec
+):
     """
     Create a circular convective cell with heavy precipitation in the center
     and moderate precipitation at the boundary of the radius.
@@ -15,12 +18,15 @@ def create_circular_cell(pr_array, center_y, center_x, radius, heavy_prec, moder
     """
     ny, nx = pr_array.shape
     y_indices, x_indices = np.indices((ny, nx))
-    dist = np.sqrt((y_indices - center_y)**2 + (x_indices - center_x)**2)
+    dist = np.sqrt((y_indices - center_y) ** 2 + (x_indices - center_x) ** 2)
     inside_mask = dist <= radius
     # Linear gradient: dist=0 -> heavy_prec, dist=radius -> moderate_prec
     # Value = moderate_prec + (heavy_prec - moderate_prec)*(1 - dist/radius)
     if np.any(inside_mask):
-        pr_array[inside_mask] = moderate_prec + (heavy_prec - moderate_prec)*(1 - dist[inside_mask]/radius)
+        pr_array[inside_mask] = moderate_prec + (heavy_prec - moderate_prec) * (
+            1 - dist[inside_mask] / radius
+        )
+
 
 def save_single_timestep(file_name, time_val, lat2d, lon2d, pr_slice, scenario_desc):
     """
@@ -33,23 +39,22 @@ def save_single_timestep(file_name, time_val, lat2d, lon2d, pr_slice, scenario_d
     """
     # Create xarray Dataset
     ds = xr.Dataset(
-        {
-            "pr": (("time", "y", "x"), pr_slice[np.newaxis, ...])
-        },
+        {"pr": (("time", "y", "x"), pr_slice[np.newaxis, ...])},
         coords={
             "time": [time_val],
-            "lat": (("y","x"), lat2d),
-            "lon": (("y","x"), lon2d)
+            "lat": (("y", "x"), lat2d),
+            "lon": (("y", "x"), lon2d),
         },
         attrs={
             "description": scenario_desc,
             "author": "David Kneidinger",
-            "email": "david.kneidinger@uni-graz.at"
-        }
+            "email": "david.kneidinger@uni-graz.at",
+        },
     )
     ds["pr"].attrs["units"] = "mm/h"
     ds["pr"].attrs["long_name"] = "precipitation"
     ds.to_netcdf(file_name)
+
 
 def create_test_data_splitting(out_dir):
     """
@@ -63,13 +68,13 @@ def create_test_data_splitting(out_dir):
     os.makedirs(out_dir, exist_ok=True)
 
     # Grid definition
-    lat = np.arange(-5,5,0.1)
-    lon = np.arange(0,10,0.1)
-    lat2d, lon2d = np.meshgrid(lat, lon, indexing='ij')
+    lat = np.arange(-5, 5, 0.1)
+    lon = np.arange(0, 10, 0.1)
+    lat2d, lon2d = np.meshgrid(lat, lon, indexing="ij")
     ny, nx = lat2d.shape
 
     # Time setup: 12 hourly timesteps from 2020-01-01 00:00:00
-    start_time = datetime(2020,1,1,0,0)
+    start_time = datetime(2020, 1, 1, 0, 0)
     nt = 12
 
     # Precip parameters
@@ -77,7 +82,7 @@ def create_test_data_splitting(out_dir):
     moderate_prec = 5.0
     radius = 10
 
-    center_y, center_x = ny//2, nx//2
+    center_y, center_x = ny // 2, nx // 2
 
     # Movement: each hour shift x by +1 cell (eastward)
     # Splitting: first half (t=0 to t=5): one single cell
@@ -98,20 +103,29 @@ def create_test_data_splitting(out_dir):
 
         if t <= 5:
             # Single cell
-            create_circular_cell(pr_slice, center_y, current_x, radius, heavy_prec, moderate_prec)
+            create_circular_cell(
+                pr_slice, center_y, current_x, radius, heavy_prec, moderate_prec
+            )
         else:
             # Two cells
-            frac = (t-6)/(11-6) # goes from 0 at t=6 to 1 at t=11
-            top_y = int(center_y - 10*frac)
-            bottom_y = int(center_y + 10*frac)
+            frac = (t - 6) / (11 - 6)  # goes from 0 at t=6 to 1 at t=11
+            top_y = int(center_y - 10 * frac)
+            bottom_y = int(center_y + 10 * frac)
             # Make radius a bit smaller for two cells, say radius=8
-            create_circular_cell(pr_slice, top_y, current_x, radius-2, heavy_prec, moderate_prec)
-            create_circular_cell(pr_slice, bottom_y, current_x, radius-2, heavy_prec, moderate_prec)
+            create_circular_cell(
+                pr_slice, top_y, current_x, radius - 2, heavy_prec, moderate_prec
+            )
+            create_circular_cell(
+                pr_slice, bottom_y, current_x, radius - 2, heavy_prec, moderate_prec
+            )
 
         # File naming: MCS-test5_YYYY-MM-DD-HH-00.nc_test
         file_name = f"MCS-test5_{current_time:%Y-%m-%d-%H-00}.nc_test"
         file_path = os.path.join(out_dir, file_name)
-        save_single_timestep(file_path, current_time, lat2d, lon2d, pr_slice, "test data for splitting")
+        save_single_timestep(
+            file_path, current_time, lat2d, lon2d, pr_slice, "test data for splitting"
+        )
+
 
 def create_test_data_merging(out_dir):
     """
@@ -125,13 +139,13 @@ def create_test_data_merging(out_dir):
     os.makedirs(out_dir, exist_ok=True)
 
     # Grid definition
-    lat = np.arange(-5,5,0.1)
-    lon = np.arange(0,10,0.1)
-    lat2d, lon2d = np.meshgrid(lat, lon, indexing='ij')
+    lat = np.arange(-5, 5, 0.1)
+    lon = np.arange(0, 10, 0.1)
+    lat2d, lon2d = np.meshgrid(lat, lon, indexing="ij")
     ny, nx = lat2d.shape
 
     # Time setup
-    start_time = datetime(2020,1,1,0,0)
+    start_time = datetime(2020, 1, 1, 0, 0)
     nt = 12
 
     # Precip parameters
@@ -139,7 +153,7 @@ def create_test_data_merging(out_dir):
     moderate_prec = 5.0
     radius = 10
 
-    center_y, center_x = ny//2, nx//2
+    center_y, center_x = ny // 2, nx // 2
 
     # Two cells: top and bottom start far apart and merge at t=6
     # Let's say at t=0 top cell at center_y-10, bottom cell at center_y+10
@@ -155,23 +169,32 @@ def create_test_data_merging(out_dir):
         if t <= 5:
             # Two separate cells
             # Linearly move them closer:
-            frac = t/5
+            frac = t / 5
             # top cell moves from center_y-10 at t=0 to center_y at t=5
-            top_y = int((center_y-20) + 10*frac)
+            top_y = int((center_y - 20) + 10 * frac)
             # bottom cell moves from center_y+10 at t=0 to center_y at t=5
-            bottom_y = int((center_y+20) - 10*frac)
-            create_circular_cell(pr_slice, top_y, current_x, radius, heavy_prec, moderate_prec)
-            create_circular_cell(pr_slice, bottom_y, current_x, radius, heavy_prec, moderate_prec)
+            bottom_y = int((center_y + 20) - 10 * frac)
+            create_circular_cell(
+                pr_slice, top_y, current_x, radius, heavy_prec, moderate_prec
+            )
+            create_circular_cell(
+                pr_slice, bottom_y, current_x, radius, heavy_prec, moderate_prec
+            )
         else:
             # After t=6, they are merged into one big cell at center_y
             # Possibly increase radius slightly to indicate a merged larger system
             merged_radius = radius + 2
-            create_circular_cell(pr_slice, center_y, current_x, merged_radius, heavy_prec, moderate_prec)
+            create_circular_cell(
+                pr_slice, center_y, current_x, merged_radius, heavy_prec, moderate_prec
+            )
 
         # File naming: MCS-test6_YYYY-MM-DD-HH-00.nc_test
         file_name = f"MCS-test6_{current_time:%Y-%m-%d-%H-00}.nc_test"
         file_path = os.path.join(out_dir, file_name)
-        save_single_timestep(file_path, current_time, lat2d, lon2d, pr_slice, "test data for merging")
+        save_single_timestep(
+            file_path, current_time, lat2d, lon2d, pr_slice, "test data for merging"
+        )
+
 
 # Example usage:
 # Create a directory for test outputs, e.g. 'test_outputs'

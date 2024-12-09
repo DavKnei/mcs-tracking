@@ -87,13 +87,13 @@ def main():
 
     # List all NetCDF files in the directory
     file_list = sorted(glob.glob(os.path.join(data_directory, f"*{file_suffix}")))
-        
+
     # List to hold detection results
     detection_results = []
 
     # Check if detection results file exists and is valid
     detection_results_exist = os.path.exists(detection_results_file)
-    
+
     if detection_results_exist:
         detection_results = load_detection_results(detection_results_file)
         if detection_results is not None:
@@ -142,11 +142,11 @@ def main():
                     grid_spacing_km,
                 )
                 detection_results.append(detection_result)
-                
+
                 print(f"MCS detection completed for {file_path}.")
                 if SAVE_PLOTS:
                     save_intermediate_plots(detection_result, output_plot_dir)
-        
+
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
         print("Detection finished.")
