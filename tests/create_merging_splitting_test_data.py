@@ -43,7 +43,8 @@ def save_single_timestep(file_name, time_val, lat2d, lon2d, pr_slice, scenario_d
         },
         attrs={
             "description": scenario_desc,
-            "author": "Your Name"
+            "author": "David Kneidinger",
+            "email": "david.kneidinger@uni-graz.at"
         }
     )
     ds["pr"].attrs["units"] = "mm/h"
