@@ -74,7 +74,8 @@ def main():
     nmaxmerge = config.get("nmaxmerge", 5)
 
     # Other parameters
-    plotting_enabled = config.get("plotting_enabled", True)
+    SAVE_PLOTS = config.get("plotting_enabled", True)
+    USE_MULTIPROCESSING = config.get("use_multiprocessing", True)
 
     # Ensure directories exist
     os.makedirs(output_path, exist_ok=True)
@@ -88,9 +89,6 @@ def main():
         
     # List to hold detection results
     detection_results = []
-
-    USE_MULTIPROCESSING = False
-    SAVE_PLOTS = False
 
     # Check if detection results file exists and is valid
     detection_results_exist = os.path.exists(detection_results_file)
@@ -159,30 +157,6 @@ def main():
     else:
         # Detection results were loaded from file
         pass
-
-    # Now, generate and save plots before tracking
-    if SAVE_PLOTS:
-        for detection_result in detection_results:
-            final_labeled_regions = detection_result["final_labeled_regions"]
-            prec = detection_result[
-                "precipitation"
-            ]  # Ensure 'precipitation' is in detection_result
-            lat = detection_result["lat"]
-            lon = detection_result["lon"]
-            file_time = detection_result["time"]
-            file_time_str = np.datetime_as_string(
-                file_time, unit="h"
-            )  # Convert time to string format
-
-            save_detection_plot(
-                lon=lon,
-                lat=lat,
-                prec=prec,
-                final_labeled_regions=final_labeled_regions,
-                file_time=file_time_str,
-                output_dir=output_plot_dir,
-                min_prec_threshold=0.1,  # Minimum precipitation to plot in color
-            )
 
     # Perform tracking
     print("Tracking of MCS...")
