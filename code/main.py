@@ -9,7 +9,7 @@ import xarray as xr
 import yaml
 from detection import detect_mcs_in_file
 from tracking import track_mcs, filter_main_mcs
-from plot import save_detection_plot, save_intermediate_plots
+from plot import save_intermediate_plots
 from input_output import (
     save_detection_results,
     load_detection_results,
@@ -63,8 +63,8 @@ def main():
 
     # Detection parameters
     min_size_threshold = config.get("min_size_threshold", 10)
-    heavy_precip_threshold = config.get("heavy_precip_threshold", 20.0)
-    moderate_precip_threshold = config.get("moderate_precip_threshold", 5.0)
+    heavy_precip_threshold = config.get("heavy_precip_threshold", 10.0)
+    moderate_precip_threshold = config.get("moderate_precip_threshold", 1.0)
     min_nr_plumes = config.get("min_nr_plumes", 1)
 
     # Tracking parameters
@@ -76,6 +76,7 @@ def main():
     # Other parameters
     SAVE_PLOTS = config.get("plotting_enabled", True)
     USE_MULTIPROCESSING = config.get("use_multiprocessing", True)
+    NUMBER_OF_CORES = config.get("number_of_cores", 24)
 
     # Ensure directories exist
     os.makedirs(output_path, exist_ok=True)
@@ -105,8 +106,6 @@ def main():
 
     if not detection_results_exist:
         if USE_MULTIPROCESSING:
-            # Specify the number of cores
-            NUMBER_OF_CORES = 24  # Adjust based on your system
 
             # Use ProcessPoolExecutor for CPU-bound tasks
             with concurrent.futures.ProcessPoolExecutor(
@@ -142,8 +141,8 @@ def main():
                     min_nr_plumes,
                     grid_spacing_km,
                 )
-                
                 detection_results.append(detection_result)
+                
                 print(f"MCS detection completed for {file_path}.")
                 if SAVE_PLOTS:
                     save_intermediate_plots(detection_result, output_plot_dir)
@@ -151,7 +150,6 @@ def main():
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
         print("Detection finished.")
-
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
     else:

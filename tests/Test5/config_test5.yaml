@@ -25,3 +25,4 @@ nmaxmerge: 5
 # Other parameters
 plotting_enabled: False
 use_multiprocessing: False
+number_of_cores: 24

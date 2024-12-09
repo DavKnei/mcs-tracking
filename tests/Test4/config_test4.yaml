@@ -12,7 +12,7 @@ grid_size_km: 4.0
 # Detection parametersS
 min_size_threshold: 10
 heavy_precip_threshold: 10.0
-moderate_precip_threshold: 1.0
+moderate_precip_threshold: 0.1
 min_nr_plumes: 1
 
 
@@ -23,5 +23,6 @@ grid_cell_area_km2: 16
 nmaxmerge: 5
 
 # Other parameters
-plotting_enabled: True
+plotting_enabled: False
 use_multiprocessing: False
+number_of_cores: 24
