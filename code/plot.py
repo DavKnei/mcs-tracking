@@ -147,7 +147,7 @@ def save_intermediate_plots(detection_result, output_dir):
     mcs_classification = detection_result['mcs_classification']
     file_time = detection_result['time']
     file_time_str = np.datetime_as_string(file_time, unit='h')
-
+    
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
@@ -244,12 +244,13 @@ def save_intermediate_plots(detection_result, output_dir):
 
     # Create custom legend
     handles = [plt.Rectangle((0,0),1,1, color=colors_list[idx]) for idx in range(len(mcs_types))]
-    ax.legend(handles, mcs_types, title='MCS Types', loc='lower center',
-              bbox_to_anchor=(0.5, -0.15), ncol=len(mcs_types))
+    if handles:
+        ax.legend(handles, mcs_types, title='MCS Types', loc='lower center',
+                bbox_to_anchor=(0.5, -0.15), ncol=len(mcs_types))
 
-    # Adjust layout to make room for the legend
-    plt.subplots_adjust(bottom=0.25)
-
-    # Save the plot
-    plt.savefig(f"{output_dir}/mcs_types_{file_time_str}.png", dpi=300, bbox_inches='tight')
+        # Adjust layout to make room for the legend
+        plt.subplots_adjust(bottom=0.25)
+        # Save the plot
+        plt.savefig(f"{output_dir}/mcs_types_{file_time_str}.png", dpi=300, bbox_inches='tight')
+        
     plt.close(fig)
