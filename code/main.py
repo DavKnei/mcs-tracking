@@ -55,6 +55,7 @@ def main():
 
     # Access parameters from config
     data_directory = config["data_directory"]
+    file_suffix = config["file_suffix"]
     output_path = config["output_path"]
     output_plot_dir = config["output_plot_dir"]
     tracking_output_dir = config["tracking_output_dir"]
@@ -83,11 +84,7 @@ def main():
     detection_results_file = os.path.join(output_path, "detection_results.nc")
 
     # List all NetCDF files in the directory
-    file_list = sorted(glob.glob(os.path.join(data_directory, "*.nc")))
-    
-    # Option for Testing, since test files have suffix .nc_test  TODO: make a nicer way to do this
-    if len(file_list) == 0:
-        file_list = sorted(glob.glob(os.path.join(data_directory, "*.nc_test")))
+    file_list = sorted(glob.glob(os.path.join(data_directory, f"*{file_suffix}")))
         
     # List to hold detection results
     detection_results = []

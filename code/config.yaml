@@ -1,7 +1,9 @@
 # config.yaml
 
+
 # Data directories
 data_directory: "/home/david/Schreibtisch/mcs-tracking/tests/Test1/data/"
+file_suffix: ".nc_test"
 output_path: "/home/david/Schreibtisch/mcs-tracking/tests/Test1/"
 output_plot_dir: "/home/david/Schreibtisch/mcs-tracking/tests/Test1/figures/"
 tracking_output_dir: "/home/david/Schreibtisch/mcs-tracking/tests/Test1/"
