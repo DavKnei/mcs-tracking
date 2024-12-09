@@ -1,0 +1,26 @@
+# config.yaml
+
+
+# Data directories
+data_directory: "/home/david/Schreibtisch/mcs-tracking/tests/Test2/data/"
+file_suffix: ".nc_test"
+output_path: "/home/david/Schreibtisch/mcs-tracking/tests/Test2/"
+output_plot_dir: "/home/david/Schreibtisch/mcs-tracking/tests/Test2/figures/"
+tracking_output_dir: "/home/david/Schreibtisch/mcs-tracking/tests/Test2/"
+grid_size_km: 4.0
+
+# Detection parametersS
+min_size_threshold: 10
+heavy_precip_threshold: 10.0
+moderate_precip_threshold: 5.0
+min_nr_plumes: 1
+
+
+# Tracking parameters
+main_lifetime_thresh: 6
+main_area_thresh: 10000
+grid_cell_area_km2: 16
+nmaxmerge: 5
+
+# Other parameters
+plotting_enabled: True
