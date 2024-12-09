@@ -95,6 +95,7 @@ nmaxmerge: 5
 ```python
 plotting_enabled: False
 use_multiprocessing: False
+number_of_cores: 24
 ```
 
 ## Testing
