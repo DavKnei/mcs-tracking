@@ -304,5 +304,4 @@ def detect_mcs_in_file(
         "shape_features": shape_features,
         "mcs_classification": mcs_classification,
     }
-
     return detection_result

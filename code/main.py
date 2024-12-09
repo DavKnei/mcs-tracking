@@ -84,15 +84,20 @@ def main():
 
     # List all NetCDF files in the directory
     file_list = sorted(glob.glob(os.path.join(data_directory, "*.nc")))
-
+    
+    # Option for Testing, since test files have suffix .nc_test  TODO: make a nicer way to do this
+    if len(file_list) == 0:
+        file_list = sorted(glob.glob(os.path.join(data_directory, "*.nc_test")))
+        
     # List to hold detection results
     detection_results = []
 
-    USE_MULTIPROCESSING = True
+    USE_MULTIPROCESSING = False
     SAVE_PLOTS = False
 
     # Check if detection results file exists and is valid
     detection_results_exist = os.path.exists(detection_results_file)
+    
     if detection_results_exist:
         detection_results = load_detection_results(detection_results_file)
         if detection_results is not None:
@@ -142,11 +147,12 @@ def main():
                     min_nr_plumes,
                     grid_spacing_km,
                 )
+                
                 detection_results.append(detection_result)
                 print(f"MCS detection completed for {file_path}.")
                 if SAVE_PLOTS:
                     save_intermediate_plots(detection_result, output_plot_dir)
-
+        
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
         print("Detection finished.")
@@ -195,10 +201,10 @@ def main():
         splitting_events,
     ) = track_mcs(
         detection_results,
-        main_lifetime_thresh=6,
-        main_area_thresh=10000,
-        grid_cell_area_km2=16,
-        nmaxmerge=5,
+        main_lifetime_thresh,
+        main_area_thresh,
+        grid_cell_area_km2,
+        nmaxmerge,
     )
     print("Tracking of MCS finished.")
 
