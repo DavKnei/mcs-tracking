@@ -3,7 +3,7 @@ import pytest
 import os
 
 
-@pytest.fixture(scope="session", params=["Test1", "Test2", "Test3", "Test4"])
+@pytest.fixture(scope="session", params=["Test1", "Test2", "Test3", "Test4", "Test7"])
 def test_case_dir(request):
     base_dir = os.path.dirname(__file__)
     case_name = request.param
