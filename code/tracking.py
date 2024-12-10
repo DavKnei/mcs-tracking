@@ -145,7 +145,8 @@ def track_mcs(
     # Dictionary to keep track of the lifetime for each MCS ID
     lifetime_dict = defaultdict(int)
     max_area_dict = defaultdict(float)
-
+    dominance_dict = defaultdict(tuple)
+    
     merging_events = []
     splitting_events = []
 
@@ -189,6 +190,7 @@ def track_mcs(
                 lifetime_dict[next_cluster_id] = 1
                 # Calculate area
                 max_area_dict[next_cluster_id] = area
+                dominance_dict[next_cluster_id] = (1, area)
                 mcs_lifetime[cluster_mask] = lifetime_dict[next_cluster_id]
                 next_cluster_id += 1
             else:
@@ -233,9 +235,10 @@ def track_mcs(
                 else:
                     # Merging or splitting event
                     prev_ids = list(overlap_area.keys())
+                    dominant_id = get_dominant_cluster(prev_ids, max_area_dict)
                     if len(prev_ids) > 1:
                         # Merging event
-                        assigned_id = next_cluster_id
+                        assigned_id = dominant_id
                         next_cluster_id += 1
                         mcs_id[cluster_mask] = assigned_id
                         current_cluster_ids[label] = assigned_id
