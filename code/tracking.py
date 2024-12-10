@@ -62,6 +62,24 @@ def handle_merging_event(overlap_area, previous_cluster_ids):
     assigned_id = min(overlap_area.keys())  # Or use next_cluster_id to assign a new ID
     return assigned_id
 
+def get_dominant_cluster(prev_ids, max_area_dict):
+    """Look for most dominant cluster in a list of previous IDs.
+
+    Args:
+        prev_ids: List of previous cluster IDs.
+        max_area_dict: Dictionary mapping cluster IDs to maximum area.
+
+    Returns:
+        best_id: Most dominant cluster ID.
+    """
+    best_id = None
+    best_area = -1
+    for pid in prev_ids:
+        if max_area_dict.get(pid,0) > best_area:
+            best_area = max_area_dict[pid]
+            best_id = pid
+    return best_id
+
 
 def filter_main_mcs(mcs_id_list, main_mcs_ids):
     """
