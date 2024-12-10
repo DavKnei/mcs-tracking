@@ -26,24 +26,17 @@ class SplittingEvent:
     child_areas: List[float]
 
 
-def handle_splitting_event(overlap_area, next_cluster_id):
-    """
-    Handle splitting events where one previous cluster overlaps with multiple current clusters.
+def handle_splitting_event(overlap_area, next_cluster_id, parent_id, max_area_dict):
+    # overlap_area keys are curr_labels
+    # Determine largest based on max_area_dict (need area info beforehand or pass child_areas)
+    # For now, we assume we have child info from the calling scope. This is tricky as is.
 
-    Parameters:
-    - overlap_area: Dictionary mapping current cluster labels to overlap percentages.
-    - next_cluster_id: Integer representing the next available cluster ID.
+    # A simpler approach:
+    # 1) The calling code already knows the parent_id and child areas (from the code that sets them)
+    # 2) Decide largest child in calling code and just assign new IDs for others.
 
-    Returns:
-    - current_cluster_ids: Dictionary mapping current cluster labels to assigned cluster IDs.
-    - next_cluster_id: Updated next_cluster_id after assigning new IDs.
-    """
-    current_cluster_ids = {}
-    for curr_label in overlap_area.keys():
-        # Assign new IDs to the split clusters
-        current_cluster_ids[curr_label] = next_cluster_id
-        next_cluster_id += 1
-    return current_cluster_ids, next_cluster_id
+    # For now, let's leave handle_splitting_event unchanged and do logic in track_mcs
+    return {}
 
 
 def handle_merging_event(overlap_area, previous_cluster_ids):
@@ -253,7 +246,7 @@ def track_mcs(
                         new_lt = old_lt + 1
                         new_ma = max(old_ma, area)
                         dominance_dict[assigned_id] = (new_lt, new_ma)
-                        
+
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
                         # Get areas of parent tracks
                         parent_areas = [max_area_dict[pid] for pid in prev_ids]
@@ -312,6 +305,24 @@ def track_mcs(
                     child_ids.append(assigned_id)
                     child_areas.append(max_area_dict[assigned_id])
                 parent_area = max_area_dict[parent_id]
+                
+                # We have parent_id, child_ids, child_areas from event
+                largest_idx = np.argmax(child_areas)
+                largest_child_label = curr_labels[largest_idx]  # The label of the largest child's current cluster
+                largest_child_id = parent_id  # Reuse parent_id for largest piece
+
+                # For other children:
+                for i, cid in enumerate(child_ids):
+                    if i != largest_idx:
+                        # Assign new ID:
+                        child_ids[i] = next_cluster_id
+                        next_cluster_id += 1
+                        # Update lifetime, area
+                        lifetime_dict[child_ids[i]] = 1
+                        max_area_dict[child_ids[i]] = child_areas[i]
+                        # Update dominance_dict as well
+                        dominance_dict[child_ids[i]] = (1, child_areas[i])
+               
                 # Limit number of splitters
                 if len(child_ids) > nmaxmerge:
                     child_ids = child_ids[:nmaxmerge]
@@ -319,12 +330,13 @@ def track_mcs(
                     warnings.warn(
                         f"Number of splitting clusters exceeds nmaxmerge ({nmaxmerge}) at time {current_time}."
                     )
+                # Update the final splitting_event structure now that IDs are adjusted
                 split_event = SplittingEvent(
-                    time=current_time,
-                    parent_id=parent_id,
-                    child_ids=child_ids,
-                    parent_area=parent_area,
-                    child_areas=child_areas,
+                time=current_time,
+                parent_id=parent_id,
+                child_ids=child_ids, # updated
+                parent_area=parent_area,
+                child_areas=child_areas
                 )
                 splitting_events.append(split_event)
 
