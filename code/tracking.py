@@ -244,8 +244,16 @@ def track_mcs(
                         mcs_id[cluster_mask] = assigned_id
                         current_cluster_ids[label] = assigned_id
                         # Initialize lifetime
-                        lifetime_dict[assigned_id] = 1
-                        max_area_dict[assigned_id] = area
+                        lifetime_dict[assigned_id] += 1
+                        if area > max_area_dict[assigned_id]:
+                            max_area_dict[assigned_id] = area
+
+                        # Also update dominance_dict:
+                        old_lt, old_ma = dominance_dict[assigned_id]
+                        new_lt = old_lt + 1
+                        new_ma = max(old_ma, area)
+                        dominance_dict[assigned_id] = (new_lt, new_ma)
+                        
                         mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
                         # Get areas of parent tracks
                         parent_areas = [max_area_dict[pid] for pid in prev_ids]
