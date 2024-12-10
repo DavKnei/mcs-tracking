@@ -20,6 +20,7 @@ def load_data(file_path, time_index=0):
     """
     ds = xr.open_dataset(file_path)
     ds = ds.isel(time=time_index)  # Select the specified time step
+    ds["time"] = ds["time"].values.astype("datetime64[s]")
     lat = ds["lat"].values
     lon = ds["lon"].values
     prec = ds["pr"]
