@@ -23,23 +23,23 @@ class SplittingEvent:
     parent_area: float
     child_areas: List[float]
 
-def initialize_new_id(label, cluster_mask, next_cluster_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime):
+def assign_new_id(label, cluster_mask, area, next_cluster_id, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime):
     """
-    Assign a new ID to a newly detected cluster that has no overlap with previous time steps.
+    Assign a new ID to a cluster that does not overlap with any previous cluster.
 
     Parameters:
-    - label: Current cluster label (not ID, just the label from final_labeled_regions)
-    - cluster_mask: Boolean mask of the current cluster
-    - next_cluster_id: The next available integer ID for a new cluster
-    - area: Area of this cluster (km²)
-    - lifetime_dict: Dict tracking the lifetime of each ID
-    - max_area_dict: Dict tracking the maximum area encountered for each ID
-    - mcs_id: 2D array for assigning MCS IDs this timestep
-    - mcs_lifetime: 2D array for assigning lifetime values this timestep
+    - label: Current cluster label from detection (for reference).
+    - cluster_mask: Boolean mask for the current cluster.
+    - area: Area of the current cluster.
+    - next_cluster_id: The next available ID to assign.
+    - lifetime_dict: Dict tracking lifetimes of clusters by ID.
+    - max_area_dict: Dict tracking max area of clusters by ID.
+    - mcs_id: 2D array for assigning IDs.
+    - mcs_lifetime: 2D array for lifetime per pixel.
 
     Returns:
-    - assigned_id: The newly assigned cluster ID
-    - next_cluster_id: The updated next_cluster_id counter
+    - assigned_id: The new assigned cluster ID.
+    - next_cluster_id: Updated next_cluster_id.
     """
     mcs_id[cluster_mask] = next_cluster_id
     lifetime_dict[next_cluster_id] = 1
@@ -296,8 +296,8 @@ def track_mcs(
 
     merging_events = []
     splitting_events = []
-
-    for idx, detection_result in enumerate(detection_results):
+    count=0
+    for idx, detection_result in enumerate(detection_results): 
         final_labeled_regions = detection_result["final_labeled_regions"]
         current_time = detection_result["time"]
         current_lat = detection_result["lat"]
@@ -321,13 +321,14 @@ def track_mcs(
         overlaps_with_prev = defaultdict(list)
         overlaps_with_curr = defaultdict(list)
 
+        
         for label in cluster_labels:
             cluster_mask = final_labeled_regions == label
             mcs_detected[cluster_mask] = 1
             area = np.sum(cluster_mask) * grid_cell_area_km2
 
             if previous_labeled_regions is None:
-                # No previous step
+                # First timestep -> no previous clusters to compare -> assign new IDs
                 assigned_id, next_cluster_id = handle_no_overlap(label, cluster_mask, area, next_cluster_id, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime)
                 current_cluster_ids[label] = assigned_id
             else:
@@ -336,28 +337,31 @@ def track_mcs(
                     prev_cluster_mask = previous_labeled_regions == prev_label
                     overlap = np.logical_and(cluster_mask, prev_cluster_mask)
                     overlap_cells = np.sum(overlap)
-                    if overlap_cells > 0:
+                    if overlap_cells > 0:  # Overlap detected
                         current_cluster_area = np.sum(cluster_mask)
                         overlap_percentage = (overlap_cells / current_cluster_area)*100
-                        if overlap_percentage >= 10:
+                        if overlap_percentage >= 10:  # Overlap area is at least 10% of current cluster
                             overlap_area[prev_id] = overlap_percentage
                             overlaps_with_prev[label].append(prev_id)
-                            overlaps_with_curr[prev_id].append(label)
+                            overlaps_with_curr[prev_id].append(label)  
 
-                if len(overlap_area) == 1:
-                    # Continuation
+                if len(overlap_area) == 1:  # Exactly one overlap detected -> same Object -> Continuation of ID
                     assigned_id = list(overlap_area.keys())[0]
                     handle_continuation(label, cluster_mask, assigned_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime)
                     current_cluster_ids[label] = assigned_id
-                elif len(overlap_area) == 0:
+                elif len(overlap_area) == 0:  # No overlap -> New Object
                     # No overlap
                     assigned_id, next_cluster_id = handle_no_overlap(label, cluster_mask, area, next_cluster_id, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime)
                     current_cluster_ids[label] = assigned_id
-                else:
-                    # Merging event
+                else:  # Multiple overlaps detected -> Merging
                     prev_ids = list(overlap_area.keys())
                     assigned_id = handle_merging(label, cluster_mask, prev_ids, area, nmaxmerge, current_time, lifetime_dict, max_area_dict, mcs_id, merging_events, mcs_lifetime)
                     current_cluster_ids[label] = assigned_id
+
+        if count == 1:
+            breakpoint()
+        else:
+            pass
 
         # After processing all clusters, handle final splitting
         print(len(overlaps_with_curr.values()))
@@ -366,7 +370,7 @@ def track_mcs(
                 overlaps_with_curr, current_cluster_ids, max_area_dict, lifetime_dict,
                 next_cluster_id, nmaxmerge, current_time, splitting_events
             )
-
+        count += 1
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
         previous_cluster_ids = current_cluster_ids.copy()
