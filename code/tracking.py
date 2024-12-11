@@ -89,7 +89,7 @@ def handle_no_overlap(label, cluster_mask, area, next_cluster_id, lifetime_dict,
         label, cluster_mask, next_cluster_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime
     )
     return assigned_id, next_cluster_id
-    
+
 def get_dominant_cluster(prev_ids, max_area_dict):
     """Find the dominant cluster (largest area) among prev_ids."""
     best_id = None
@@ -99,6 +99,52 @@ def get_dominant_cluster(prev_ids, max_area_dict):
             best_area = max_area_dict[pid]
             best_id = pid
     return best_id
+    
+def handle_merging(label, cluster_mask, prev_ids, area, nmaxmerge, current_time, lifetime_dict, max_area_dict, mcs_id, merging_events, mcs_lifetime):
+    """
+    Handle merging events where multiple previous IDs overlap with one current cluster.
+    Keeps the dominant parent's ID and records a MergingEvent.
+
+    Parameters:
+    - label: Current cluster label
+    - cluster_mask: Boolean mask for this cluster
+    - prev_ids: List of previous cluster IDs involved in merging
+    - area: Area of current cluster (km²)
+    - nmaxmerge: Maximum allowed merging clusters
+    - current_time: Current timestamp
+    - lifetime_dict, max_area_dict: Dictionaries tracking lifetime and max area
+    - mcs_id: 2D array for MCS IDs
+    - merging_events: List to append MergingEvent
+    - mcs_lifetime: 2D array for lifetime this timestep
+
+    Returns:
+    - assigned_id: The ID chosen for the merged cluster (dominant parent's ID)
+    """
+    dominant_parent_id = get_dominant_cluster(prev_ids, max_area_dict)
+    assigned_id = dominant_parent_id
+    mcs_id[cluster_mask] = assigned_id
+    lifetime_dict[assigned_id] += 1
+    if area > max_area_dict[assigned_id]:
+        max_area_dict[assigned_id] = area
+    mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+
+    parent_areas = [max_area_dict[pid] for pid in prev_ids]
+    if len(prev_ids) > nmaxmerge:
+        prev_ids = prev_ids[:nmaxmerge]
+        parent_areas = parent_areas[:nmaxmerge]
+        warnings.warn(
+            f"Number of merging clusters exceeds nmaxmerge ({nmaxmerge}) at time {current_time}."
+        )
+    merge_event = MergingEvent(
+        time=current_time,
+        parent_ids=prev_ids,
+        child_id=assigned_id,
+        parent_areas=parent_areas,
+        child_area=area,
+    )
+    merging_events.append(merge_event)
+    return assigned_id
+
 
 def filter_main_mcs(mcs_id_list, main_mcs_ids):
     """
