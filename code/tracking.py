@@ -49,6 +49,72 @@ def assign_new_id(label, cluster_mask, area, next_cluster_id, lifetime_dict, max
     next_cluster_id += 1
     return assigned_id, next_cluster_id
 
+def assign_ids_based_on_overlap(
+    previous_labeled_regions,
+    final_labeled_regions,
+    previous_cluster_ids,
+    next_cluster_id,
+    lifetime_dict,
+    max_area_dict,
+    mcs_id,
+    mcs_lifetime,
+    overlap_threshold=10,
+):
+    """
+    Assign consistent cluster IDs based on spatial overlap with previous timestep.
+
+    Parameters:
+    - previous_labeled_regions: 2D array of cluster labels from previous timestep.
+    - final_labeled_regions: 2D array of cluster labels from current timestep.
+    - previous_cluster_ids: Dict mapping previous cluster labels to their IDs.
+    - next_cluster_id: The next available cluster ID for new clusters.
+    - lifetime_dict: Dict tracking the lifetime of each cluster by ID.
+    - max_area_dict: Dict tracking max area of each cluster by ID.
+    - mcs_id: 2D array for assigning IDs this timestep.
+    - mcs_lifetime: 2D array for lifetime per pixel this timestep.
+    - overlap_threshold: Minimum overlap percentage to consider a match.
+
+    Returns:
+    - current_cluster_ids: Dict mapping current cluster labels to assigned IDs.
+    - next_cluster_id: Updated next_cluster_id
+    """
+    current_cluster_ids = {}
+
+    unique_prev_labels = np.unique(previous_labeled_regions)
+    unique_prev_labels = unique_prev_labels[unique_prev_labels != -1]
+    unique_curr_labels = np.unique(final_labeled_regions)
+    unique_curr_labels = unique_curr_labels[unique_curr_labels != -1]
+
+    for curr_label in unique_curr_labels:
+        curr_mask = final_labeled_regions == curr_label
+        curr_area = np.sum(curr_mask)
+        overlap_areas = {}
+
+        for prev_label in unique_prev_labels:
+            prev_mask = previous_labeled_regions == prev_label
+            overlap = np.logical_and(curr_mask, prev_mask)
+            overlap_area = np.sum(overlap)
+            if overlap_area > 0:
+                overlap_percentage = (overlap_area / curr_area) * 100
+                if overlap_percentage >= overlap_threshold:
+                    overlap_areas[prev_label] = overlap_percentage
+
+        if len(overlap_areas) == 0:
+            # No suitable overlap, assign new ID
+            assigned_id, next_cluster_id = assign_new_id(curr_label, curr_mask, curr_area, next_cluster_id, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime)
+            current_cluster_ids[curr_label] = assigned_id
+        else:
+            # Continue from best overlap
+            best_prev_label = max(overlap_areas, key=overlap_areas.get)
+            assigned_id = previous_cluster_ids[best_prev_label]
+
+            # Use handle_continuation logic:
+            handle_continuation(curr_label, curr_mask, assigned_id, curr_area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime)
+            current_cluster_ids[curr_label] = assigned_id
+
+    return current_cluster_ids, next_cluster_id
+
+
 def handle_continuation(label, cluster_mask, assigned_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime):
     """
     Handle the continuation case when exactly one previous cluster overlaps sufficiently
