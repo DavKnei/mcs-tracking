@@ -99,7 +99,7 @@ def get_dominant_cluster(prev_ids, max_area_dict):
             best_area = max_area_dict[pid]
             best_id = pid
     return best_id
-    
+
 def handle_merging(label, cluster_mask, prev_ids, area, nmaxmerge, current_time, lifetime_dict, max_area_dict, mcs_id, merging_events, mcs_lifetime):
     """
     Handle merging events where multiple previous IDs overlap with one current cluster.
@@ -145,6 +145,88 @@ def handle_merging(label, cluster_mask, prev_ids, area, nmaxmerge, current_time,
     merging_events.append(merge_event)
     return assigned_id
 
+def handle_splitting_final_step(overlaps_with_curr, current_cluster_ids, max_area_dict, lifetime_dict, next_cluster_id, nmaxmerge, current_time, splitting_events):
+    """
+    Handle the final splitting logic after all clusters in this timestep are processed.
+    If a previous ID overlaps multiple current clusters, we identify it as splitting.
+
+    We ensure the largest child keeps the parent_id and assign new IDs to the others.
+
+    Parameters:
+    - overlaps_with_curr: Dict mapping prev_id -> list of current labels
+    - current_cluster_ids: Dict mapping current cluster labels to their assigned IDs
+    - max_area_dict, lifetime_dict: Tracking area and lifetime
+    - next_cluster_id: Next available ID for new clusters
+    - nmaxmerge: Max allowed merging/splitting
+    - current_time: Current timestamp
+    - splitting_events: List to append SplittingEvent
+
+    Returns:
+    - next_cluster_id: Updated next_cluster_id after assigning new IDs
+    """
+    for parent_id, curr_labels in overlaps_with_curr.items():
+        if len(curr_labels) > 1:
+            # Splitting event
+            child_ids = []
+            child_areas = []
+            for clab in curr_labels:
+                cid = current_cluster_ids[clab]
+                child_ids.append(cid)
+                child_areas.append(max_area_dict[cid])
+            parent_area = max_area_dict[parent_id]
+
+            largest_idx = np.argmax(child_areas)
+            largest_child_id = child_ids[largest_idx]
+
+            if largest_child_id != parent_id:
+                # If parent_id is among child_ids:
+                if parent_id in child_ids:
+                    # Assign new IDs to all non-largest children
+                    for i, cid in enumerate(child_ids):
+                        if i != largest_idx:
+                            child_ids[i] = next_cluster_id
+                            lifetime_dict[next_cluster_id] = 1
+                            max_area_dict[next_cluster_id] = child_areas[i]
+                            next_cluster_id += 1
+                    # Update parent's area/lifetime if needed
+                    # largest_child_id had some lifetime/area
+                    # parent_id remains parent_id
+                    lifetime_dict[parent_id] = lifetime_dict[largest_child_id]
+                    max_area_dict[parent_id] = child_areas[largest_idx]
+                else:
+                    # parent_id not in child_ids: just assign new IDs to others
+                    for i, cid in enumerate(child_ids):
+                        if i != largest_idx:
+                            child_ids[i] = next_cluster_id
+                            lifetime_dict[next_cluster_id] = 1
+                            max_area_dict[next_cluster_id] = child_areas[i]
+                            next_cluster_id += 1
+            else:
+                # largest child already has parent_id, assign new IDs to others
+                for i, cid in enumerate(child_ids):
+                    if i != largest_idx:
+                        child_ids[i] = next_cluster_id
+                        lifetime_dict[next_cluster_id] = 1
+                        max_area_dict[next_cluster_id] = child_areas[i]
+                        next_cluster_id += 1
+
+            if len(child_ids) > nmaxmerge:
+                child_ids = child_ids[:nmaxmerge]
+                child_areas = child_areas[:nmaxmerge]
+                warnings.warn(
+                    f"Number of splitting clusters exceeds nmaxmerge ({nmaxmerge}) at time {current_time}."
+                )
+
+            split_event = SplittingEvent(
+                time=current_time,
+                parent_id=parent_id,
+                child_ids=child_ids,
+                parent_area=parent_area,
+                child_areas=child_areas,
+            )
+            splitting_events.append(split_event)
+
+    return next_cluster_id
 
 def filter_main_mcs(mcs_id_list, main_mcs_ids):
     """
