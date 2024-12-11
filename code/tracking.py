@@ -71,26 +71,6 @@ def handle_continuation(label, cluster_mask, assigned_id, area, lifetime_dict, m
         max_area_dict[assigned_id] = area
     
 
-def handle_no_overlap(label, cluster_mask, area, next_cluster_id, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime):
-    """
-    Handle case with no overlap to previous clusters, indicating a new MCS ID should be assigned.
-
-    Parameters:
-    - label: Current cluster label
-    - cluster_mask: Boolean mask of the current cluster
-    - area: Area of current cluster (km²)
-    - next_cluster_id: The next available ID
-    - lifetime_dict, max_area_dict, mcs_id, mcs_lifetime: As described above
-
-    Returns:
-    - assigned_id: The new assigned ID
-    - next_cluster_id: Updated next_cluster_id
-    """
-    assigned_id, next_cluster_id = initialize_new_id(
-        label, cluster_mask, next_cluster_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime
-    )
-    return assigned_id, next_cluster_id
-
 def get_dominant_cluster(prev_ids, max_area_dict):
     """Find the dominant cluster (largest area) among prev_ids
     
