@@ -69,6 +69,7 @@ def handle_continuation(label, cluster_mask, assigned_id, area, lifetime_dict, m
     mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
     if area > max_area_dict[assigned_id]:
         max_area_dict[assigned_id] = area
+    
 
 def handle_no_overlap(label, cluster_mask, area, next_cluster_id, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime):
     """
@@ -91,7 +92,15 @@ def handle_no_overlap(label, cluster_mask, area, next_cluster_id, lifetime_dict,
     return assigned_id, next_cluster_id
 
 def get_dominant_cluster(prev_ids, max_area_dict):
-    """Find the dominant cluster (largest area) among prev_ids."""
+    """Find the dominant cluster (largest area) among prev_ids
+    
+    Parameters:
+    - prev_ids: List of previous cluster IDs
+    - max_area_dict: Dict mapping cluster IDs to their max area
+    
+    Returns:
+    - best_id: The ID of the dominant cluster
+    """
     best_id = None
     best_area = -1
     for pid in prev_ids:
@@ -122,11 +131,8 @@ def handle_merging(label, cluster_mask, prev_ids, area, nmaxmerge, current_time,
     """
     dominant_parent_id = get_dominant_cluster(prev_ids, max_area_dict)
     assigned_id = dominant_parent_id
-    mcs_id[cluster_mask] = assigned_id
-    lifetime_dict[assigned_id] += 1
-    if area > max_area_dict[assigned_id]:
-        max_area_dict[assigned_id] = area
-    mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+
+    handle_continuation(label, cluster_mask, assigned_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime)
 
     parent_areas = [max_area_dict[pid] for pid in prev_ids]
     if len(prev_ids) > nmaxmerge:
@@ -255,7 +261,7 @@ def track_mcs(
     nmaxmerge,
 ):
     """
-    Track MCSs across time steps using detection results, delegating tasks to helper functions.
+    Track MCSs across time steps using detection results.
 
     Parameters:
     - detection_results: List of dictionaries with detection results per timestep.
@@ -308,7 +314,9 @@ def track_mcs(
         current_cluster_ids = {}
 
         cluster_labels = np.unique(final_labeled_regions)
-        cluster_labels = cluster_labels[cluster_labels != 0]
+
+        # Remove background label (-1)
+        cluster_labels = cluster_labels[cluster_labels != -1]
 
         overlaps_with_prev = defaultdict(list)
         overlaps_with_curr = defaultdict(list)
@@ -352,7 +360,12 @@ def track_mcs(
                     current_cluster_ids[label] = assigned_id
 
         # After processing all clusters, handle final splitting
-        next_cluster_id = handle_splitting_final_step(overlaps_with_curr, current_cluster_ids, max_area_dict, lifetime_dict, next_cluster_id, nmaxmerge, current_time, splitting_events)
+        print(len(overlaps_with_curr.values()))
+        if any(len(vals) > 1 for vals in overlaps_with_curr.values()):
+            next_cluster_id = handle_splitting_final_step(
+                overlaps_with_curr, current_cluster_ids, max_area_dict, lifetime_dict,
+                next_cluster_id, nmaxmerge, current_time, splitting_events
+            )
 
         # Update previous clusters
         previous_labeled_regions = final_labeled_regions.copy()
