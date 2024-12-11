@@ -327,7 +327,6 @@ def track_mcs(
     - merging_events: List of MergingEvent instances.
     - splitting_events: List of SplittingEvent instances.
     """
-    from collections import defaultdict
 
     previous_labeled_regions = None
     previous_cluster_ids = {}
