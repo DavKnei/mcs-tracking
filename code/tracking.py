@@ -49,6 +49,27 @@ def initialize_new_id(label, cluster_mask, next_cluster_id, area, lifetime_dict,
     next_cluster_id += 1
     return assigned_id, next_cluster_id
 
+def handle_continuation(label, cluster_mask, assigned_id, area, lifetime_dict, max_area_dict, mcs_id, mcs_lifetime):
+    """
+    Handle the continuation case when exactly one previous cluster overlaps sufficiently
+    with the current cluster. The current cluster continues the previous cluster's ID.
+
+    Parameters:
+    - label: Current cluster label
+    - cluster_mask: Boolean mask of the current cluster
+    - assigned_id: The ID of the overlapping previous cluster
+    - area: Area of the current cluster (km²)
+    - lifetime_dict: Dict tracking the lifetime of each ID
+    - max_area_dict: Dict tracking the maximum area for each ID
+    - mcs_id: 2D array to assign MCS IDs for this timestep
+    - mcs_lifetime: 2D array to assign lifetime values for this timestep
+    """
+    mcs_id[cluster_mask] = assigned_id
+    lifetime_dict[assigned_id] += 1
+    mcs_lifetime[cluster_mask] = lifetime_dict[assigned_id]
+    if area > max_area_dict[assigned_id]:
+        max_area_dict[assigned_id] = area
+
 def get_dominant_cluster(prev_ids, max_area_dict):
     """Find the dominant cluster (largest area) among prev_ids."""
     best_id = None
