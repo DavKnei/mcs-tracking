@@ -18,7 +18,7 @@ min_nr_plumes: 1
 
 # Tracking parameters
 main_lifetime_thresh: 6
-main_area_thresh: 10000
+main_area_thresh: 1000
 grid_cell_area_km2: 16
 nmaxmerge: 5
 
