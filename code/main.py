@@ -87,6 +87,8 @@ def main():
 
     # List all NetCDF files in the directory
     file_list = sorted(glob.glob(os.path.join(data_directory, f"*{file_suffix}")))
+    if not file_list:
+        raise FileNotFoundError("File directory is empty or no files found matching the specified suffix. Exiting...")
 
     # List to hold detection results
     detection_results = []
