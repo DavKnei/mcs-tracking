@@ -21,9 +21,16 @@ def load_data(file_path, time_index=0):
     ds = xr.open_dataset(file_path)
     ds = ds.isel(time=time_index)  # Select the specified time step
     ds["time"] = ds["time"].values.astype("datetime64[s]")
-    lat = ds["lat"].values
-    lon = ds["lon"].values
-    prec = ds["pr"]
+    latitude = ds["lat"].values
+    longitude = ds["lon"].values
+
+    # Make lat and lon 2d 
+    if latitude.ndim == 1 and longitude.ndim ==1:
+        lat, lon = np.meshgrid(longitude, latitude)
+    else:
+        lat, lon = latitude, longitude
+
+    prec = ds["precipitation"]
     return ds, lat, lon, prec
 
 

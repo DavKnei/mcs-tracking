@@ -37,6 +37,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
     - labeled_array: 2D array with cluster labels for each grid point.
       Points not belonging to any cluster are labeled as -1.
     """
+      
     lat_points = latitudes[precipitation_mask]
     lon_points = longitudes[precipitation_mask]
     coords = np.column_stack((lat_points, lon_points))
@@ -259,13 +260,13 @@ def detect_mcs_in_file(
     """
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, time_index)
-
+    
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
 
     # Step 2: Create binary mask for moderate precipitation
     precipitation_mask = precipitation_smooth >= moderate_precip_threshold
-
+    
     # Step 3: Cluster moderate precipitation points using HDBSCAN
     clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_size_threshold)
     
