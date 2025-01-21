@@ -29,7 +29,7 @@ def load_data(file_path, data_var, time_index=0):
         lat, lon = np.meshgrid(longitude, latitude)
     else:
         lat, lon = latitude, longitude
-    
+
     prec = ds[str(data_var)]
     return ds, lat, lon, prec
 
@@ -57,6 +57,13 @@ def save_detection_results(detection_results, output_filepath):
 
     # Stack the final_labeled_regions along a new time dimension
     final_labeled_regions_array = np.stack(final_labeled_regions_list, axis=0)
+
+    # Make final labeled regions that are no cluster to be -1
+    final_labeled_regions_array[
+        final_labeled_regions_array == 0
+    ] = (
+        -1
+    )  # TODO: find a better solution, think of using 0 to to be able to save detection results as int
 
     # Create an xarray Dataset
     ds = xr.Dataset(
