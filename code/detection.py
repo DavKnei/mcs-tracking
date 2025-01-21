@@ -236,6 +236,7 @@ def classify_mcs_types(shape_features):
 
 def detect_mcs_in_file(
     file_path,
+    data_var,
     heavy_precip_threshold,
     moderate_precip_threshold,
     min_size_threshold,
@@ -248,6 +249,7 @@ def detect_mcs_in_file(
 
     Parameters:
     - file_path: Path to the NetCDF file containing precipitation data.
+    - data_var: Variable name of detected variable.
     - heavy_precip_threshold: Threshold for heavy precipitation (mm/h).
     - moderate_precip_threshold: Threshold for moderate precipitation (mm/h).
     - min_size_threshold: Minimum size threshold for clusters (number of grid cells).
@@ -259,7 +261,7 @@ def detect_mcs_in_file(
     - detection_result: Dictionary containing detection results.
     """
     # Load data
-    ds, lat, lon, precipitation = load_data(file_path, time_index)
+    ds, lat, lon, precipitation = load_data(file_path, data_var, time_index)
     
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)

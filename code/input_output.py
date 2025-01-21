@@ -4,7 +4,7 @@ import os
 import datetime
 
 
-def load_data(file_path, time_index=0):
+def load_data(file_path, data_var, time_index=0):
     """
     Load the dataset and select the specified time step.
 
@@ -30,7 +30,7 @@ def load_data(file_path, time_index=0):
     else:
         lat, lon = latitude, longitude
 
-    prec = ds["precipitation"]
+    prec = ds[data_var]
     return ds, lat, lon, prec
 
 

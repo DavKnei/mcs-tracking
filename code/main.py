@@ -19,6 +19,7 @@ from input_output import (
 # Define a function for parallel processing
 def process_file(
     file_path,
+    data_var,
     heavy_precip_threshold,
     moderate_precip_threshold,
     min_size_threshold,
@@ -27,6 +28,7 @@ def process_file(
 ):
     result = detect_mcs_in_file(
         file_path,
+        data_var,
         heavy_precip_threshold,
         moderate_precip_threshold,
         min_size_threshold,
@@ -60,6 +62,7 @@ def main():
     output_plot_dir = config["output_plot_dir"]
     tracking_output_dir = config["tracking_output_dir"]
     grid_spacing_km = config["grid_size_km"]
+    data_var = config["var_name"]
 
     # Detection parameters
     min_size_threshold = config.get("min_size_threshold", 10)
@@ -118,6 +121,7 @@ def main():
                     executor.submit(
                         process_file,
                         file_path,
+                        data_var,
                         heavy_precip_threshold,
                         moderate_precip_threshold,
                         min_size_threshold,
@@ -137,6 +141,7 @@ def main():
             for file_path in file_list:
                 detection_result = detect_mcs_in_file(
                     file_path,
+                    data_var,
                     heavy_precip_threshold,
                     moderate_precip_threshold,
                     min_size_threshold,

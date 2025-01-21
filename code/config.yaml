@@ -2,12 +2,13 @@
 
 
 # Data
-data_directory: "./tests/Test6/data/"
+data_directory: "../tests/Test7/data/"
 file_suffix: ".nc_test"
-output_path: "./tests/Test6/"
-output_plot_dir: "./tests/Test6/figures/"
-tracking_output_dir: "./tests/Test6/"
-grid_size_km: 4.0
+output_path: "../tests/Test7/"
+output_plot_dir: "../tests/Test7/figures/"
+tracking_output_dir: "../tests/Test7/"
+grid_size_km: 11.0
+var_name: 'pr'
 
 # Detection parametersS
 min_size_threshold: 10
@@ -19,10 +20,10 @@ min_nr_plumes: 1
 # Tracking parameters
 main_lifetime_thresh: 6
 main_area_thresh: 10000
-grid_cell_area_km2: 16
+grid_cell_area_km2: 1
 nmaxmerge: 5
 
 # Other parameters
 plotting_enabled: False
-use_multiprocessing: False
-number_of_cores: 24
+use_multiprocessing: True
+number_of_cores: 4
