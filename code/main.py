@@ -162,6 +162,7 @@ def main():
 
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
+
         print("Detection finished.")
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
