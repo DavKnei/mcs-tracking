@@ -30,7 +30,7 @@ def load_data(file_path, data_var, time_index=0):
     else:
         lat, lon = latitude, longitude
 
-    prec = ds[data_var]
+    prec = ds[str(data_var)]
     return ds, lat, lon, prec
 
 
