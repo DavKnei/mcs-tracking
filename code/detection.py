@@ -50,7 +50,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
         clusterer = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
             metric="haversine",
-            allow_single_cluster=True,
+            allow_single_cluster=False,
         )
         clusterer.fit(np.radians(coords))
         labels = clusterer.labels_
