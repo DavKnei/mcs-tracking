@@ -24,6 +24,7 @@ grid_cell_area_km2: 1
 nmaxmerge: 5
 
 # Other parameters
+detection: False
 plotting_enabled: False
 use_multiprocessing: True
 number_of_cores: 4

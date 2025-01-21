@@ -80,6 +80,7 @@ def main():
     SAVE_PLOTS = config.get("plotting_enabled", True)
     USE_MULTIPROCESSING = config.get("use_multiprocessing", True)
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
+    DO_DETECTION = config.get("detection", True)
 
     # Ensure directories exist
     os.makedirs(output_path, exist_ok=True)
@@ -91,7 +92,9 @@ def main():
     # List all NetCDF files in the directory
     file_list = sorted(glob.glob(os.path.join(data_directory, f"*{file_suffix}")))
     if not file_list:
-        raise FileNotFoundError("File directory is empty or no files found matching the specified suffix. Exiting...")
+        raise FileNotFoundError(
+            "File directory is empty or no files found matching the specified suffix. Exiting..."
+        )
 
     # List to hold detection results
     detection_results = []
@@ -99,13 +102,16 @@ def main():
     # Check if detection results file exists and is valid
     detection_results_exist = os.path.exists(detection_results_file)
 
-    if detection_results_exist:
+    if detection_results_exist and not DO_DETECTION:
         detection_results = load_detection_results(detection_results_file)
         if detection_results is not None:
             print("Detection results loaded from file. Skipping detection step.")
         else:
             print("Detection results file is invalid. Running detection.")
             detection_results_exist = False  # Set to False to run detection
+    elif detection_results_exist and DO_DETECTION:
+        detection_results_exist = False  # Set to False to run detection
+        print("Detection file does exist. detection=True: Running detection")
     else:
         print("Detection results file does not exist. Running detection.")
 

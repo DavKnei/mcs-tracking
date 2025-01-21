@@ -37,7 +37,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
     - labeled_array: 2D array with cluster labels for each grid point.
       Points not belonging to any cluster are labeled as -1.
     """
-      
+
     lat_points = latitudes[precipitation_mask]
     lon_points = longitudes[precipitation_mask]
     coords = np.column_stack((lat_points, lon_points))
@@ -48,7 +48,9 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
     else:
         # HDBSCAN with haversine metric
         clusterer = hdbscan.HDBSCAN(
-            min_cluster_size=min_cluster_size, metric="haversine", allow_single_cluster=True
+            min_cluster_size=min_cluster_size,
+            metric="haversine",
+            allow_single_cluster=True,
         )
         clusterer.fit(np.radians(coords))
         labels = clusterer.labels_
@@ -262,16 +264,16 @@ def detect_mcs_in_file(
     """
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, data_var, time_index)
-    
+
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
 
     # Step 2: Create binary mask for moderate precipitation
     precipitation_mask = precipitation_smooth >= moderate_precip_threshold
-    
+
     # Step 3: Cluster moderate precipitation points using HDBSCAN
     clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_size_threshold)
-    
+
     # Step 4: Identify convective plumes within clusters
     convective_plumes = identify_convective_plumes(
         precipitation_smooth, clusters, heavy_precip_threshold

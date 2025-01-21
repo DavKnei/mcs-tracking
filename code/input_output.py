@@ -24,8 +24,8 @@ def load_data(file_path, data_var, time_index=0):
     latitude = ds["lat"].values
     longitude = ds["lon"].values
 
-    # Make lat and lon 2d 
-    if latitude.ndim == 1 and longitude.ndim ==1:
+    # Make lat and lon 2d
+    if latitude.ndim == 1 and longitude.ndim == 1:
         lat, lon = np.meshgrid(longitude, latitude)
     else:
         lat, lon = latitude, longitude
