@@ -29,7 +29,7 @@ def load_data(file_path, data_var, time_index=0):
         lat, lon = np.meshgrid(longitude, latitude)
     else:
         lat, lon = latitude, longitude
-
+    
     prec = ds[str(data_var)]
     return ds, lat, lon, prec
 
