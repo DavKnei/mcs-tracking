@@ -421,6 +421,7 @@ def track_mcs(
 
     for idx, detection_result in enumerate(detection_results):
         final_labeled_regions = detection_result["final_labeled_regions"]
+
         current_time = detection_result["time"]
         current_lat = detection_result["lat"]
         current_lon = detection_result["lon"]

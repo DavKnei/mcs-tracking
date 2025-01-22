@@ -302,6 +302,13 @@ def detect_mcs_in_file(
     # Step 8: Classify MCS types
     mcs_classification = classify_mcs_types(shape_features)
 
+    # Make final labeled regions that are no cluster to be -1
+    final_labeled_regions[
+        final_labeled_regions == 0
+    ] = (
+        -1
+    )  # TODO: find a better solution, think of using 0 to to be able to save detection results as int
+
     # Prepare detection result
     detection_result = {
         "file_path": file_path,
