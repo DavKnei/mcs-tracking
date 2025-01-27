@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
-from scipy.ndimage import gaussian_filter
 import hdbscan
+from scipy.signal import fftconvolve
 from scipy.ndimage import distance_transform_edt
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
@@ -9,19 +9,21 @@ from skimage.measure import regionprops, label
 from input_output import load_data
 
 
-def smooth_precipitation_field(precipitation, sigma=1):
+def smooth_precipitation_field(precipitation, kernel_size=2):
     """
-    Apply Gaussian smoothing to the precipitation field.
+    Apply simple box filter using FFT convolution with a kernel_size x kernel_size box to the precipitation field.
 
     Parameters:
     - precipitation: 2D array of precipitation values.
-    - sigma: Standard deviation for Gaussian kernel.
+    - kernel_size: Size of the box filter kernel.
 
     Returns:
     - Smoothed precipitation field as a 2D array.
     """
-    return gaussian_filter(precipitation, sigma=sigma)
-
+    kernel = np.ones((kernel_size, kernel_size), dtype=float)
+    kernel /= kernel.sum()
+    return fftconvolve(precipitation, kernel, mode='same')
+  
 
 def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_size):
     """
@@ -266,7 +268,7 @@ def detect_mcs_in_file(
     ds, lat, lon, precipitation = load_data(file_path, data_var, time_index)
 
     # Step 1: Smooth the precipitation field
-    precipitation_smooth = smooth_precipitation_field(precipitation, sigma=1)
+    precipitation_smooth = smooth_precipitation_field(precipitation, kernel_size=2)
 
     # Step 2: Create binary mask for moderate precipitation
     precipitation_mask = precipitation_smooth >= moderate_precip_threshold
