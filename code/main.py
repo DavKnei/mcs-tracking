@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import xarray as xr
 import yaml
-from detection import detect_mcs_in_file
+from detection_morpho_dilation import detect_mcs_in_file
 from tracking import track_mcs, filter_main_mcs
 from plot import save_intermediate_plots
 from input_output import (
