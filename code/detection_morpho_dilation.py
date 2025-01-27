@@ -107,15 +107,23 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
     return labels_2d
 
 
+from collections import defaultdict
+import numpy as np
+from scipy.ndimage import generate_binary_structure, binary_dilation
+
 def morphological_expansion_with_merging(
-    core_labels, precip, expand_threshold=0.1, max_iterations=80
-):  # TODO: speed up the dilation
+    core_labels,
+    precip,
+    expand_threshold=0.1,
+    max_iterations=80
+):
     """
     Performs iterative morphological expansion of labeled cores. In each iteration:
       1) Dilate each label by one pixel (8-connected).
       2) Collect newly added pixels (where precip >= expand_threshold).
-      3) Detect collisions (pixels claimed by multiple labels).
-      4) Merge colliding labels into one label if they meet the merging condition.
+      3) Build collisions (pixels claimed by multiple labels).
+      4) Repeatedly merge collisions until no further merges occur.
+      5) Finally apply expansions to the core_labels.
     Repeats until no more pixels are added or until max_iterations is reached.
 
     Args:
@@ -130,74 +138,86 @@ def morphological_expansion_with_merging(
     Notes:
         - Collisions are unified by default if precip >= expand_threshold at the collision pixel.
         - The merges are done in sets (transitive merges).
-        - Repeats expansions until stable or max_iterations is hit.
+        - We re-check collisions repeatedly within each iteration to avoid partial merges
+          (which can cause 'checkerboard' leftovers).
     """
 
     structure = generate_binary_structure(2, 1)  # 8-connected
     iteration = 0
+
     while iteration < max_iterations:
         iteration += 1
         changed_pixels_total = 0
 
-        # Collect expansions for each label (in this iteration)
+        # 1) Gather expansions for each label
         expansions = {lbl: set() for lbl in np.unique(core_labels) if lbl > 0}
 
-        # 1) Expand each label by 1 morphological dilation
+        # Morphologically dilate each label by 1 step
         for lbl in expansions:
-            feature_mask = core_labels == lbl  # current label's region
-            dilated_mask = binary_dilation(
-                feature_mask, structure=structure
-            )  # 1-step dilation
-            # new_pixels = set of newly included cells that were 0 before AND meet expand_threshold
+            feature_mask = (core_labels == lbl)
+            dilated_mask = binary_dilation(feature_mask, structure=structure)
+            # Only accept new pixels where precip >= expand_threshold
             new_pixels = dilated_mask & (~feature_mask) & (precip >= expand_threshold)
 
-            # Mark them as expansions for this label
-            for (r, c) in zip(*new_pixels.nonzero()):
-                expansions[lbl].add((r, c))
+            if np.any(new_pixels):
+                coords = zip(*new_pixels.nonzero())
+                for (r, c) in coords:
+                    expansions[lbl].add((r, c))
 
             changed_pixels_total += np.count_nonzero(new_pixels)
 
         if changed_pixels_total == 0:
-            print(f"Expansion converged after {iteration} iterations")
+            print(f"Expansion converged after {iteration} iterations.")
             break
 
-        # 2) Collision handling: gather all newly added pixels in a global dict
-        pixel_claims = defaultdict(list)
-        for lbl, pixset in expansions.items():
-            for (r, c) in pixset:
-                pixel_claims[(r, c)].append(lbl)
+        # 2) Merge collisions in a loop until stable
+        merges_happened = True
+        while merges_happened:
+            merges_happened = False
 
-        # We'll store merges to unify at the end
-        merges = []  # list of sets or pairs of labels to unify
+            # 2a) Build a mapping from pixel -> list of labels claiming it
+            pixel_claims = defaultdict(list)
+            for lbl, pixset in expansions.items():
+                for (r, c) in pixset:
+                    pixel_claims[(r, c)].append(lbl)
 
-        # 3) Check collisions. If multiple labels claim the same pixel & precip >= expand_threshold => unify
-        for (r, c), claim_list in pixel_claims.items():
-            if len(claim_list) > 1 and precip[r, c] >= expand_threshold:
-                merges.append(set(claim_list))
+            # 2b) Detect collisions
+            merges = []
+            for (r, c), claim_list in pixel_claims.items():
+                if len(claim_list) > 1 and precip[r, c] >= expand_threshold:
+                    merges.append(set(claim_list))
 
-        # merges might look like [ {1,2}, {2,3}, ... ]
-        # unify them transitively (so if 1 merges with 2, 2 merges with 3 => 1,2,3 become one label)
-        merges_to_apply = unify_merge_sets(merges)
+            if not merges:
+                break  # no collisions => done merging
 
-        # 4) Merge all labels in each group into the smallest label
-        for merge_group in merges_to_apply:
-            master = min(merge_group)
-            for other in merge_group:
-                if other != master:
-                    # unify all 'other' => 'master'
-                    core_labels[core_labels == other] = master
-                    expansions[master].update(expansions[other])  # combine expansions
-                    expansions.pop(other, None)  # remove old label
+            merges_to_apply = unify_merge_sets(merges)
 
-        # 5) Now apply expansions to out_labels
+            # 2c) Apply merges => pick smallest label as master
+            for mg in merges_to_apply:
+                if len(mg) < 2:
+                    continue  # single label
+                master = min(mg)
+                old_labels = [x for x in mg if x != master]
+
+                # Reassign expansions
+                for old_lbl in old_labels:
+                    if old_lbl in expansions:
+                        expansions[master].update(expansions[old_lbl])
+                        del expansions[old_lbl]
+                        merges_happened = True
+
+                # Also rewrite label array so we don't keep partial expansions
+                # (this ensures collisions are recognized properly if they happen again)
+                for old_lbl in old_labels:
+                    core_labels[core_labels == old_lbl] = master
+
+        # 3) Finally, apply expansions to core_labels
+        #    Now that merges are stable for this iteration
         for lbl, pixset in expansions.items():
             for (r, c) in pixset:
                 core_labels[r, c] = lbl
 
-        # End iteration - if merges or expansions happened, we do another iteration
-
     return core_labels
-
 
 def unify_merge_sets(merges):
     """
@@ -242,6 +262,91 @@ def unify_merge_sets(merges):
                 new_merged.append(s)
         merged = new_merged
     return merged
+
+import numpy as np
+
+def unify_checkerboard_simple(core_labels, precip, threshold=0.1, max_passes=10):  # TODO: should not be necessary if morphological_expansion_with_merging is working correctly
+    """
+    A simpler “lowest‐label‐wins” approach to fix checkerboard patterns by
+    repeatedly scanning for local adjacencies where a pixel can unify to a smaller label.
+
+    For each labeled pixel (r, c):
+      - Check its 8 neighbors.
+      - If any neighbor has a smaller label M < L, and either cell's precipitation
+        is >= threshold, unify label L -> M (lowest label wins).
+    This repeats up to max_passes times or until no more unifications occur,
+    eliminating checkerboard patches.
+
+    Args:
+        core_labels (np.ndarray):
+            2D integer array (labels > 0, 0 = background).
+        precip (np.ndarray):
+            2D float array, same shape as core_labels.
+        threshold (float):
+            Precipitation threshold to allow merging. If either pixel's precip
+            is >= threshold, we unify.
+        max_passes (int):
+            Limit on how many times we loop over the array to unify labels.
+
+    Returns:
+        np.ndarray:
+            Updated core_labels array with checkerboard boundaries minimized,
+            using a local “lowest label wins” rule.
+
+    Notes:
+        - Because we unify L -> M if M < L, large clusters with smaller IDs can
+          absorb neighboring clusters with bigger IDs if they share a boundary
+          above the threshold.
+        - In extreme cases, this can unify more than you want. Use with caution.
+        - Generally faster and easier than a full adjacency BFS approach, but can
+          require several passes for large domains.
+    """
+    nrows, ncols = core_labels.shape
+    changed = True
+    passes = 0
+
+    # Offsets for 8-neighborhood
+    neighbors_8 = [(-1, -1), (-1, 0), (-1, 1),
+                   (0, -1),           (0, 1),
+                   (1, -1),  (1, 0),  (1, 1)]
+
+    while changed and passes < max_passes:
+        changed = False
+        passes += 1
+
+        # We'll scan row by row
+        for r in range(nrows):
+            for c in range(ncols):
+                lbl = core_labels[r, c]
+                if lbl <= 0:
+                    continue
+
+                val_rc = precip[r, c]
+                # Check 8 neighbors
+                for dr, dc in neighbors_8:
+                    rr, cc = r+dr, c+dc
+                    if 0 <= rr < nrows and 0 <= cc < ncols:
+                        neighbor_lbl = core_labels[rr, cc]
+                        if neighbor_lbl > 0 and neighbor_lbl < lbl:
+                            # Check precipitation threshold
+                            val_neighbor = precip[rr, cc]
+                            if val_rc >= threshold or val_neighbor >= threshold:
+                                # unify lbl -> neighbor_lbl
+                                core_labels[core_labels == lbl] = neighbor_lbl
+                                changed = True
+                                # We must break out after a unify, because 'lbl' is gone
+                                break
+                if changed:
+                    # Once we've changed one pixel in this row, we might as well
+                    # proceed to next pixel. The entire cluster lbl might already
+                    # be overwritten
+                    # So we do break out of the for c loop:
+                    break
+            if changed:
+                # break out of the row loop as well
+                break
+
+    return core_labels
 
 
 def identify_convective_plumes(precipitation, clusters, heavy_threshold):
@@ -465,6 +570,13 @@ def detect_mcs_in_file(
         precipitation_smooth,
         expand_threshold=moderate_precip_threshold,
         max_iterations=80,
+    )
+
+    expanded_labels = unify_checkerboard_simple(
+        expanded_labels,
+        precipitation_smooth,
+        threshold=moderate_precip_threshold,
+        max_passes=10,
     )
 
     # Step 4: Filter MCS candidates based on number of convective plumes and area
