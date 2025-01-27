@@ -2,10 +2,11 @@ import numpy as np
 import xarray as xr
 import hdbscan
 from scipy.signal import fftconvolve
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, binary_dilation, generate_binary_structure
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from skimage.measure import regionprops, label
+from collections import defaultdict
 from input_output import load_data
 
 
@@ -63,7 +64,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
 
     return labeled_array
 
-def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3):
+def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=1):
     """
     Cluster heavy precipitation cores using HDBSCAN.
 
@@ -104,6 +105,117 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
     # Insert into 2D array
     labels_2d[core_mask] = core_labels
     return labels_2d
+
+def morphological_expansion_with_merging(core_labels, precip, expand_threshold=0.1, max_iterations=80):  # TODO: speed up the dilation
+    """Morphological expansion of labeled cores, unifying them if expansions collide in regions with precip >= corridor_threshold.
+
+    Args:
+        core_labels (numpy.ndarray): Identified heavy precipitation cores 
+        precip (xr.DataArray): Precipitation field
+        expand_threshold (float): Threshold for expansion
+        max_iterations (int): Maximum number of iterations in the expansion
+
+    Returns:
+        cluster_labels (numpy.ndarray): Updated cluster labels after expansion and merging
+    """
+
+    structure = generate_binary_structure(2, 1)  # 8-connected
+    iteration = 0
+    while iteration < max_iterations:
+        iteration += 1
+        changed_pixels_total = 0
+
+        # Collect expansions for each label (in this iteration)
+        expansions = { lbl: set() for lbl in np.unique(core_labels) if lbl>0 }
+
+        # 1) Expand each label by 1 morphological dilation
+        for lbl in expansions:
+            feature_mask = (core_labels == lbl)
+            dilated_mask = binary_dilation(feature_mask, structure=structure)
+            new_pixels = (dilated_mask & ~feature_mask & (precip >= expand_threshold))
+
+            # Mark them as expansions for this label
+            for (r,c) in zip(*new_pixels.nonzero()):
+                expansions[lbl].add((r,c))
+
+            changed_pixels_total += np.count_nonzero(new_pixels)
+
+        if changed_pixels_total == 0:
+            print(f"Expansion converged after {iteration} iterations") 
+            break
+
+        # 2) Collision handling: gather all newly added pixels in a global dict
+        pixel_claims = defaultdict(list)
+        for lbl, pixset in expansions.items():
+            for (r,c) in pixset:
+                pixel_claims[(r,c)].append(lbl)
+
+        # We'll store merges to unify at the end
+        merges = []  # list of sets or pairs of labels to unify
+
+        # 3) Check collisions. If multiple labels claim the same pixel & precip >= expand_threshold => unify
+        for (r,c), claim_list in pixel_claims.items():
+            if len(claim_list) > 1 and precip[r,c] >= expand_threshold:
+                merges.append(set(claim_list))
+
+        # merges might look like [ {1,2}, {2,3}, ... ]
+        # unify them transitively (so if 1 merges with 2, 2 merges with 3 => 1,2,3 become one label)
+        merges_to_apply = unify_merge_sets(merges)
+
+        # 4) Apply merges => pick smallest label as "master", unify others into it
+        for merge_group in merges_to_apply:
+            master = min(merge_group)
+            for other in merge_group:
+                if other != master:
+                    # unify all 'other' => 'master'
+                    core_labels[core_labels == other] = master
+                    expansions[master].update(expansions[other])  # combine expansions
+                    expansions.pop(other, None)  # remove old label
+
+        # 5) Now apply expansions to out_labels
+        for lbl, pixset in expansions.items():
+            for (r,c) in pixset:
+                core_labels[r,c] = lbl
+
+        # End iteration - if merges or expansions happened, we do another iteration
+        cluster_labels = core_labels
+    return cluster_labels
+
+def unify_merge_sets(merges):
+    """Given a list of sets, unify them transitively.
+    Args:
+        merges (list): list of sets, e.g. [ {1,2}, {2,3}, {4,5}, {1,3} ]
+    Returns:
+        list: list of final sets where all overlapping sets are merged, e.g. [ {1,2,3}, {4,5} ]
+    """
+    merged = []
+    for mset in merges:
+        # compare with existing sets in 'merged'
+        found = False
+        for i, existing in enumerate(merged):
+            if mset & existing:
+                merged[i] = existing.union(mset)
+                found = True
+                break
+        if not found:
+            merged.append(mset)
+    # repeat until stable
+    stable = False
+    while not stable:
+        stable = True
+        new_merged = []
+        for s in merged:
+            merged_any = False
+            for i, x in enumerate(new_merged):
+                if s & x:
+                    new_merged[i] = x.union(s)
+                    merged_any = True
+                    stable = False
+                    break
+            if not merged_any:
+                new_merged.append(s)
+        merged = new_merged
+    return merged
 
 def identify_convective_plumes(precipitation, clusters, heavy_threshold):
     """
@@ -313,10 +425,15 @@ def detect_mcs_in_file(
 
     # Step 2: Detect heavy precipitation cores with HDBSCAN
     core_labels = detect_cores_hdbscan(
-            precipitation, lat, lon, 
+            precipitation_smooth, lat, lon, 
             core_thresh=heavy_precip_threshold, 
-            min_cluster_size=3
+            min_cluster_size=1
         )
+    
+    # Step 3: Morphological expansion with merging
+    expanded_labels = morphological_expansion_with_merging(core_labels, precipitation_smooth, expand_threshold=0.1, max_iterations=40)
+
+
     breakpoint()
     precipitation_mask = (precipitation_smooth >= moderate_precip_threshold)
     # Step 3: Cluster moderate precipitation points using HDBSCAN
