@@ -64,7 +64,7 @@ def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_
 
     return labeled_array
 
-def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=1):
+def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3):
     """
     Cluster heavy precipitation cores using HDBSCAN.
 
@@ -84,7 +84,7 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
     """
     core_mask = (precipitation >= core_thresh)
     labels_2d = np.zeros_like(precipitation, dtype=int)
-    if not np.any(core_mask):
+    if np.sum(core_mask) < min_cluster_size:
         return labels_2d
 
     # Extract lat/lon for the masked pixels
@@ -116,7 +116,7 @@ def morphological_expansion_with_merging(core_labels, precip, expand_threshold=0
         max_iterations (int): Maximum number of iterations in the expansion
 
     Returns:
-        cluster_labels (numpy.ndarray): Updated cluster labels after expansion and merging
+        core_labels (numpy.ndarray): Updated cluster labels after expansion and merging
     """
 
     structure = generate_binary_structure(2, 1)  # 8-connected
@@ -178,8 +178,8 @@ def morphological_expansion_with_merging(core_labels, precip, expand_threshold=0
                 core_labels[r,c] = lbl
 
         # End iteration - if merges or expansions happened, we do another iteration
-        cluster_labels = core_labels
-    return cluster_labels
+
+    return core_labels
 
 def unify_merge_sets(merges):
     """Given a list of sets, unify them transitively.
@@ -427,28 +427,18 @@ def detect_mcs_in_file(
     core_labels = detect_cores_hdbscan(
             precipitation_smooth, lat, lon, 
             core_thresh=heavy_precip_threshold, 
-            min_cluster_size=1
+            min_cluster_size=3  # Min number of points in a cluster
         )
     
     # Step 3: Morphological expansion with merging
     expanded_labels = morphological_expansion_with_merging(core_labels, precipitation_smooth, expand_threshold=0.1, max_iterations=40)
 
 
-    breakpoint()
-    precipitation_mask = (precipitation_smooth >= moderate_precip_threshold)
-    # Step 3: Cluster moderate precipitation points using HDBSCAN
-    clusters = cluster_with_hdbscan(lat, lon, precipitation_mask, min_size_threshold)
-
-    # Step 4: Identify convective plumes within clusters
-    convective_plumes = identify_convective_plumes(
-        precipitation_smooth, clusters, heavy_precip_threshold
-    )
-
-    # Step 6: Filter MCS candidates based on number of convective plumes and area
+    # Step 4: Filter MCS candidates based on number of convective plumes and area
     grid_cell_area_km2 = grid_spacing_km**2
     mcs_candidate_labels = filter_mcs_candidates(
-        clusters,
-        convective_plumes,
+        expanded_labels,
+        core_labels,
         min_size_threshold,
         min_nr_plumes,
         grid_cell_area_km2,
@@ -456,7 +446,7 @@ def detect_mcs_in_file(
 
     # Create final labeled regions for MCS candidates
     final_labeled_regions = np.where(
-        np.isin(clusters, mcs_candidate_labels), clusters, 0
+        np.isin(expanded_labels, mcs_candidate_labels), expanded_labels, 0
     )
 
     # Step 7: Extract shape features from clusters
@@ -477,13 +467,12 @@ def detect_mcs_in_file(
     # Prepare detection result
     detection_result = {
         "file_path": file_path,
-        "moderate_prec_clusters": clusters,
         "final_labeled_regions": final_labeled_regions,
         "lat": lat,
         "lon": lon,
         "precipitation": precipitation_smooth,
         "time": ds["time"].values,
-        "convective_plumes": convective_plumes,
+        "convective_plumes": core_labels,
         "shape_features": shape_features,
         "mcs_classification": mcs_classification,
     }
