@@ -11,7 +11,7 @@ from collections import defaultdict
 @dataclass
 class MergingEvent:
     time: datetime.datetime
-    parent_ids: List[int]
+    parent_ids: List[int] 
     child_id: int
     parent_areas: List[float]
     child_area: float
@@ -72,6 +72,7 @@ def assign_ids_based_on_overlap(
     mcs_id,
     mcs_lifetime,
     overlap_threshold=10,
+    merging_events=None,
 ):
     """
     Assign consistent cluster IDs based on spatial overlap with previous timestep.
@@ -86,6 +87,7 @@ def assign_ids_based_on_overlap(
     - mcs_id: 2D array for assigning IDs this timestep.
     - mcs_lifetime: 2D array for lifetime per pixel this timestep.
     - overlap_threshold: Minimum overlap percentage to consider a match.
+    - merging_events: List to append MergingEvent instances.
 
     Returns:
     - current_cluster_ids: Dict mapping current cluster labels to assigned IDs.
@@ -126,20 +128,19 @@ def assign_ids_based_on_overlap(
             )
             current_cluster_ids[curr_label] = assigned_id
         else:
-            # Continue from best overlap
-            best_prev_label = max(overlap_areas, key=overlap_areas.get)
-            assigned_id = previous_cluster_ids[best_prev_label]
-
-            # Use handle_continuation logic:
-            handle_continuation(
-                curr_label,
-                curr_mask,
-                assigned_id,
-                curr_area,
-                lifetime_dict,
-                max_area_dict,
-                mcs_id,
-                mcs_lifetime,
+            assigned_id = handle_merging(
+                curr_label=curr_label,
+                curr_mask=curr_mask,
+                overlap_areas=overlap_areas, # dict {prev_label: %}
+                previous_cluster_ids=previous_cluster_ids,
+                lifetime_dict=lifetime_dict,
+                max_area_dict=max_area_dict,
+                mcs_id=mcs_id,
+                mcs_lifetime=mcs_lifetime,
+                merging_events=merging_events if merging_events else [],
+               current_time=None,  
+                area_curr_cluster=curr_area,
+                nmaxmerge=5,       
             )
             current_cluster_ids[curr_label] = assigned_id
 
@@ -197,66 +198,73 @@ def get_dominant_cluster(prev_ids, max_area_dict):
 
 
 def handle_merging(
-    label,
-    cluster_mask,
-    prev_ids,
-    area,
-    nmaxmerge,
-    current_time,
+    curr_label,
+    curr_mask,
+    overlap_areas,
+    previous_cluster_ids,
     lifetime_dict,
     max_area_dict,
     mcs_id,
-    merging_events,
     mcs_lifetime,
+    merging_events,
+    current_time,
+    area_curr_cluster,
+    nmaxmerge=5,
 ):
     """
-    Handle merging events where multiple previous IDs overlap with one current cluster.
-    Keeps the dominant parent's ID and records a MergingEvent.
+    Handle the merging scenario where multiple previous IDs overlap the current cluster.
+    We pick the 'best' ID based on the largest overlap percentage. That ID continues,
+    the others effectively 'merge' into it, but in this simplified logic we do NOT
+    assign new IDs to them. We just keep track that multiple parents existed.
 
     Parameters:
-    - label: Current cluster label
-    - cluster_mask: Boolean mask for this cluster
-    - prev_ids: List of previous cluster IDs involved in merging
-    - area: Area of current cluster (km²)
-    - nmaxmerge: Maximum allowed merging clusters
-    - current_time: Current timestamp
-    - lifetime_dict, max_area_dict: Dictionaries tracking lifetime and max area
-    - mcs_id: 2D array for MCS IDs
-    - merging_events: List to append MergingEvent
-    - mcs_lifetime: 2D array for lifetime this timestep
+        curr_label: The current cluster label (from detection).
+        curr_mask: Boolean mask for the current cluster.
+        overlap_areas: Dict {prev_label: overlap_percentage}
+        previous_cluster_ids: Maps prev_label -> ID
+        lifetime_dict, max_area_dict: As usual
+        mcs_id, mcs_lifetime: 2D arrays for labeling
+        merging_events: list to append MergingEvent
+        current_time: for MergingEvent record
+        area_curr_cluster: total area (pixel count) of curr_mask
+        nmaxmerge: max allowed merges (like in handle_splitting)
 
     Returns:
-    - assigned_id: The ID chosen for the merged cluster (dominant parent's ID)
+        assigned_id: The chosen ID to continue
     """
-    dominant_parent_id = get_dominant_cluster(prev_ids, max_area_dict)
-    assigned_id = dominant_parent_id
+    # "best_prev_label" is the old label with highest overlap_percentage
+    best_prev_label = max(overlap_areas, key=overlap_areas.get)
+    assigned_id = previous_cluster_ids[best_prev_label]
 
+    # gather all parent IDs
+    parent_ids = [previous_cluster_ids[plab] for plab in overlap_areas.keys()]
+    parent_areas = [max_area_dict[pid] for pid in parent_ids]
+
+    # If more than 1 ID => merging
+    if len(parent_ids) > 1:
+        if len(parent_ids) > nmaxmerge:
+            parent_ids = parent_ids[:nmaxmerge]
+            parent_areas = parent_areas[:nmaxmerge]
+        merge_evt = MergingEvent(
+            time=current_time,
+            parent_ids=parent_ids,
+            child_id=assigned_id,
+            parent_areas=parent_areas,
+            child_area=area_curr_cluster,
+        )
+        merging_events.append(merge_evt)
+
+    # Then unify the new cluster with assigned_id
     handle_continuation(
-        label,
-        cluster_mask,
+        curr_label,
+        curr_mask,
         assigned_id,
-        area,
-        lifetime_dict,
+        area_curr_cluster,
+       lifetime_dict,
         max_area_dict,
         mcs_id,
         mcs_lifetime,
     )
-
-    parent_areas = [max_area_dict[pid] for pid in prev_ids]
-    if len(prev_ids) > nmaxmerge:
-        prev_ids = prev_ids[:nmaxmerge]
-        parent_areas = parent_areas[:nmaxmerge]
-        warnings.warn(
-            f"Number of merging clusters exceeds nmaxmerge ({nmaxmerge}) at time {current_time}."
-        )
-    merge_event = MergingEvent(
-        time=current_time,
-        parent_ids=prev_ids,
-        child_id=assigned_id,
-        parent_areas=parent_areas,
-        child_area=area,
-    )
-    merging_events.append(merge_event)
     return assigned_id
 
 
@@ -308,7 +316,7 @@ def handle_splitting_final_step(
                     # Assign new IDs to all non-largest children
                     for i, cid in enumerate(child_ids):
                         if i != largest_idx:
-                            child_ids[i] = next_cluster_id
+                            child_ids[i] = next_cluster_id  # Assign new ID
                             lifetime_dict[next_cluster_id] = 1
                             max_area_dict[next_cluster_id] = child_areas[i]
                             next_cluster_id += 1
@@ -404,6 +412,7 @@ def track_mcs(
 
     previous_labeled_regions = None
     previous_cluster_ids = {}
+    merge_split_cluster_ids = {}
     next_cluster_id = 1
 
     mcs_detected_list = []
@@ -415,6 +424,9 @@ def track_mcs(
 
     lifetime_dict = defaultdict(int)
     max_area_dict = defaultdict(float)
+
+    merge_into_MCS_ids = defaultdict(list)
+    split_off_MCS_ids = defaultdict(list)
 
     merging_events = []
     splitting_events = []
@@ -472,6 +484,7 @@ def track_mcs(
                     mcs_lifetime,
                 )
                 previous_cluster_ids[label] = assigned_id
+                merge_split_cluster_ids[label] = assigned_id  #  Assign all clusters to themselves in the first timestep
                 mcs_detected[cluster_mask] = 1
         else:
             # Subsequent timesteps
@@ -490,9 +503,6 @@ def track_mcs(
             # Compute overlaps_with_curr for merging/splitting detection if needed
             overlaps_with_curr = defaultdict(list)
             # Populate overlaps_with_curr by comparing prev_id to current clusters:
-            # This step depends on how you detect merging/splitting.
-            # If merging/splitting logic requires multiple previous or current clusters,
-            # you can compute it similarly to before:
             unique_prev_labels = np.unique(previous_labeled_regions)
             unique_prev_labels = unique_prev_labels[unique_prev_labels != -1]
             unique_curr_labels = np.unique(final_labeled_regions)
@@ -526,7 +536,7 @@ def track_mcs(
                     splitting_events,
                 )
 
-            # Assign mcs_detected =1 for all clusters
+            # Assign mcs_detected = 1 for all clusters
             unique_labels = np.unique(final_labeled_regions)
             unique_labels = unique_labels[unique_labels != -1]
             for label in unique_labels:
