@@ -232,9 +232,10 @@ def handle_merging(
     Returns:
         assigned_id: The chosen ID to continue
     """
-    # "best_prev_label" is the old label with highest overlap_percentage
-    best_prev_label = max(overlap_areas, key=overlap_areas.get)
-    assigned_id = previous_cluster_ids[best_prev_label]
+    parent_ids = [previous_cluster_ids[plab] for plab in overlap_areas.keys()]
+    dominant_parent_id = get_dominant_cluster(parent_ids, max_area_dict)
+    assigned_id = dominant_parent_id
+
 
     # gather all parent IDs
     parent_ids = [previous_cluster_ids[plab] for plab in overlap_areas.keys()]
