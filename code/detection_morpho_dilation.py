@@ -30,45 +30,6 @@ def smooth_precipitation_field(precipitation, kernel_size=2):
     return fftconvolve(precipitation, kernel, mode="same")
 
 
-def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_size):
-    """
-    Cluster moderate precipitation regions using HDBSCAN.
-
-    Parameters:
-    - latitudes: 2D array of latitude values corresponding to the precipitation grid.
-    - longitudes: 2D array of longitude values corresponding to the precipitation grid.
-    - precipitation_mask: 2D boolean array where True indicates moderate precipitation.
-    - min_cluster_size: Minimum number of samples in a cluster for HDBSCAN.
-
-    Returns:
-    - labeled_array: 2D array with cluster labels for each grid point.
-      Points not belonging to any cluster are labeled as -1.
-    """
-
-    lat_points = latitudes[precipitation_mask]
-    lon_points = longitudes[precipitation_mask]
-    coords = np.column_stack((lat_points, lon_points))
-
-    # Check if there are any points to cluster
-    if not np.any(precipitation_mask):
-        return np.full(precipitation_mask.shape, -1)
-    else:
-        # HDBSCAN with haversine metric
-        clusterer = hdbscan.HDBSCAN(
-            min_cluster_size=min_cluster_size,
-            metric="haversine",
-            allow_single_cluster=False,
-        )
-        clusterer.fit(np.radians(coords))
-        labels = clusterer.labels_
-
-    # Create labeled array
-    labeled_array = np.full(precipitation_mask.shape, -1)
-    labeled_array[precipitation_mask] = labels + 1  # Add 1 to make labels positive
-
-    return labeled_array
-
-
 def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3):
     """
     Cluster heavy precipitation cores using HDBSCAN.
@@ -106,10 +67,6 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
     labels_2d[core_mask] = core_labels
     return labels_2d
 
-
-from collections import defaultdict
-import numpy as np
-from scipy.ndimage import generate_binary_structure, binary_dilation
 
 def morphological_expansion_with_merging(
     core_labels,
@@ -263,7 +220,6 @@ def unify_merge_sets(merges):
         merged = new_merged
     return merged
 
-import numpy as np
 
 def unify_checkerboard_simple(core_labels, precip, threshold=0.1, max_passes=10):  # TODO: should not be necessary if morphological_expansion_with_merging is working correctly
     """
@@ -347,46 +303,6 @@ def unify_checkerboard_simple(core_labels, precip, threshold=0.1, max_passes=10)
                 break
 
     return core_labels
-
-
-def identify_convective_plumes(precipitation, clusters, heavy_threshold):
-    """
-    Identify convective plumes within clusters using watershed segmentation.
-
-    Parameters:
-    - precipitation: 2D array of smoothed precipitation values.
-    - clusters: 2D array of cluster labels obtained from clustering.
-    - heavy_threshold: Precipitation threshold to identify heavy precipitation areas (convective plumes).
-
-    Returns:
-    - convective_plume_labels: 2D array with labels for convective plumes.
-    """
-    convective_plume_labels = np.zeros_like(clusters)
-    cluster_labels = np.unique(clusters)
-    cluster_labels = cluster_labels[cluster_labels != 0]  # Exclude background
-
-    for label_value in cluster_labels:
-        cluster_mask = clusters == label_value
-        # Apply heavy precipitation threshold within the cluster
-        heavy_mask = np.logical_and(precipitation >= heavy_threshold, cluster_mask)
-        if np.any(heavy_mask):
-            # Compute the distance transform
-            distance = distance_transform_edt(heavy_mask)
-            # Find local maxima
-            coordinates = peak_local_max(distance, labels=cluster_mask, min_distance=3)
-            if len(coordinates) == 0:
-                continue  # Skip if no peaks are found
-            # Create markers array
-            markers = np.zeros_like(distance, dtype=int)
-            for idx, (row, col) in enumerate(coordinates, start=1):
-                markers[row, col] = idx
-            # Apply watershed
-            labels_ws = watershed(-distance, markers=markers, mask=cluster_mask)
-            # Assign unique labels to convective plumes
-            labels_ws += convective_plume_labels.max()
-            convective_plume_labels += labels_ws
-
-    return convective_plume_labels
 
 
 def filter_mcs_candidates(
@@ -557,7 +473,7 @@ def detect_mcs_in_file(
 
     # Step 2: Detect heavy precipitation cores with HDBSCAN
     core_labels = detect_cores_hdbscan(
-        precipitation_smooth,
+        precipitation,
         lat,
         lon,
         core_thresh=heavy_precip_threshold,
