@@ -12,7 +12,7 @@ from collections import defaultdict
 @dataclass
 class MergingEvent:
     time: datetime.datetime
-    parent_ids: List[int] 
+    parent_ids: List[int]
     child_id: int
     parent_areas: List[float]
     child_area: float
@@ -63,8 +63,6 @@ def assign_new_id(
     return assigned_id, next_cluster_id
 
 
-
-
 def get_dominant_cluster(prev_ids, max_area_dict):
     """Find the dominant cluster (largest area) among prev_ids
 
@@ -88,7 +86,7 @@ def check_overlaps(
     previous_labeled_regions,
     final_labeled_regions,
     previous_cluster_ids,
-    overlap_threshold=10
+    overlap_threshold=10,
 ):
     """
     Checks overlap between the old labeled regions (previous_labeled_regions)
@@ -128,7 +126,7 @@ def check_overlaps(
     unique_curr_labels = unique_curr_labels[unique_curr_labels != -1]
 
     for new_label in unique_curr_labels:
-        curr_mask = (final_labeled_regions == new_label)
+        curr_mask = final_labeled_regions == new_label
         curr_area = np.sum(curr_mask)
 
         # We'll gather relevant old track IDs here
@@ -145,7 +143,7 @@ def check_overlaps(
                 # Possibly we have a label not in previous_cluster_ids => no assigned track
                 continue
 
-            prev_mask = (previous_labeled_regions == old_label_detection)
+            prev_mask = previous_labeled_regions == old_label_detection
             overlap_pixels = np.logical_and(curr_mask, prev_mask)
             overlap_area = np.sum(overlap_pixels)
             if overlap_area > 0:
@@ -157,6 +155,7 @@ def check_overlaps(
 
     return overlap_map
 
+
 def handle_no_overlap(
     new_labels_no_overlap,
     final_labeled_regions,
@@ -165,7 +164,7 @@ def handle_no_overlap(
     max_area_dict,
     mcs_id,
     mcs_lifetime,
-    grid_cell_area_km2
+    grid_cell_area_km2,
 ):
     """
     Assign brand-new track IDs to all new labels that have no overlap
@@ -196,7 +195,7 @@ def handle_no_overlap(
     assigned_ids_map = {}
 
     for lbl in new_labels_no_overlap:
-        mask = (final_labeled_regions == lbl)
+        mask = final_labeled_regions == lbl
         area_pixels = np.sum(mask)
         area_km2 = area_pixels * grid_cell_area_km2
 
@@ -210,6 +209,7 @@ def handle_no_overlap(
 
     return assigned_ids_map, next_cluster_id
 
+
 def handle_continuation(
     new_label,
     old_track_id,
@@ -218,7 +218,7 @@ def handle_continuation(
     mcs_lifetime,
     lifetime_dict,
     max_area_dict,
-    grid_cell_area_km2
+    grid_cell_area_km2,
 ):
     """Continues an existing old_track_id for the new_label cluster.
 
@@ -237,7 +237,7 @@ def handle_continuation(
     grid_cell_area_km2 : float
     """
 
-    mask = (final_labeled_regions == new_label)
+    mask = final_labeled_regions == new_label
     area_pixels = np.sum(mask)
     area_km2 = area_pixels * grid_cell_area_km2
 
@@ -247,6 +247,7 @@ def handle_continuation(
     if area_km2 > max_area_dict[old_track_id]:
         max_area_dict[old_track_id] = area_km2
 
+
 def handle_merging(
     new_label,
     old_track_ids,  # list of old track IDs
@@ -255,7 +256,7 @@ def handle_merging(
     current_time,
     max_area_dict,
     grid_cell_area_km2,
-    nmaxmerge=5
+    nmaxmerge=5,
 ):
     """
     Multiple old track IDs => merges into the new_label's final track ID.
@@ -277,8 +278,9 @@ def handle_merging(
     # record MergingEvent if merging_events is not None
     if merging_events is not None and len(old_track_ids) > 1:
         from datetime import datetime
+
         # compute child_area from new_label
-        mask = (final_labeled_regions == new_label)
+        mask = final_labeled_regions == new_label
         area_pix = np.sum(mask)
         child_area = area_pix * grid_cell_area_km2
         parent_areas = [max_area_dict[pid] for pid in old_track_ids]
@@ -287,11 +289,12 @@ def handle_merging(
             parent_ids=old_track_ids,
             child_id=best_id,
             parent_areas=parent_areas,
-            child_area=child_area
+            child_area=child_area,
         )
         merging_events.append(mevt)
 
     return best_id
+
 
 def handle_splitting(
     old_track_id,
@@ -305,7 +308,7 @@ def handle_splitting(
     lifetime_dict,
     max_area_dict,
     grid_cell_area_km2,
-    nmaxsplit=5
+    nmaxsplit=5,
 ):
     """
     One old_track_id => multiple new labels => splitting.
@@ -317,32 +320,34 @@ def handle_splitting(
     # measure areas of new labels
     new_label_areas = []
     for nlbl in new_label_list:
-        mask = (final_labeled_regions == nlbl)
+        mask = final_labeled_regions == nlbl
         area_pix = np.sum(mask)
         new_label_areas.append(area_pix * grid_cell_area_km2)
 
     # pick largest
-    idx_sorted = sorted(range(len(new_label_list)),
-                        key=lambda i: new_label_areas[i],
-                        reverse=True)
+    idx_sorted = sorted(
+        range(len(new_label_list)), key=lambda i: new_label_areas[i], reverse=True
+    )
     keep_idx = idx_sorted[0]
     keep_label = new_label_list[keep_idx]
     keep_area = new_label_areas[keep_idx]
 
     # the rest => new IDs
     splitted_assign_map = {}
-    
+
     # unify keep_label => old_track_id
     splitted_assign_map[keep_label] = old_track_id
-    lifetime_dict[old_track_id] -= 1  #  TODO: Weird error in splitting lifetime is 2 to high. lifetime_dict only gets updated +1 in handle_continuation. This fixes it for now.
+    lifetime_dict[
+        old_track_id
+    ] -= 1  #  TODO: Weird error in splitting lifetime is 2 to high. lifetime_dict only gets updated +1 in handle_continuation. This fixes it for now.
     if keep_area > max_area_dict[old_track_id]:
         max_area_dict[old_track_id] = keep_area
 
     # rewriting in the array
-    keep_mask = (final_labeled_regions == keep_label)
+    keep_mask = final_labeled_regions == keep_label
     mcs_id[keep_mask] = old_track_id
     mcs_lifetime[keep_mask] = lifetime_dict[old_track_id]
-    
+
     splitted_child_labels = []
     splitted_child_areas = []
 
@@ -355,13 +360,13 @@ def handle_splitting(
         lifetime_dict[next_cluster_id] = 1
         max_area_dict[next_cluster_id] = area_s
         # rewrite
-        mask_s = (final_labeled_regions == lbl)
+        mask_s = final_labeled_regions == lbl
         mcs_id[mask_s] = next_cluster_id
         mcs_lifetime[mask_s] = 1
         splitted_child_labels.append(next_cluster_id)
         splitted_child_areas.append(area_s)
         next_cluster_id += 1
-    
+
     # record a SplittingEvent if we have more than 1 new label
     if splitting_events is not None and len(new_label_list) > 1:
         if len(new_label_list) > nmaxsplit:
@@ -371,25 +376,28 @@ def handle_splitting(
             parent_id=old_track_id,
             child_ids=[splitted_assign_map[lbl] for lbl in new_label_list],
             parent_area=max_area_dict[old_track_id],
-            child_areas=[max_area_dict[splitted_assign_map[lbl]] for lbl in new_label_list],
+            child_areas=[
+                max_area_dict[splitted_assign_map[lbl]] for lbl in new_label_list
+            ],
         )
         splitting_events.append(sevt)
 
     return splitted_assign_map, next_cluster_id
 
-def filter_main_mcs(mcs_id_list, main_mcs_ids):
+
+def filter_main_mcs(mcs_ids_list, main_mcs_ids):
     """
     Filter tracking results to include only main MCS tracks.
 
     Parameters:
-    - mcs_id_list: List of MCS ID arrays.
+    - mcs_ids_list: List of MCS ID arrays.
     - main_mcs_ids: List of MCS IDs identified as main MCS.
 
     Returns:
     - filtered_mcs_id_list: List of MCS ID arrays with only main MCS IDs.
     """
     filtered_mcs_id_list = []
-    for mcs_id_array in mcs_id_list:
+    for mcs_id_array in mcs_ids_list:
         filtered_array = mcs_id_array.copy()
         mask = ~np.isin(filtered_array, main_mcs_ids)
         filtered_array[mask] = 0
@@ -415,7 +423,7 @@ def track_mcs(
     - nmaxmerge: Max allowed number of clusters in a merge/split.
 
     Returns:
-    - mcs_id_list: List of ID arrays per timestep.
+    - mcs_ids_list: List of ID arrays per timestep.
     - lifetime_list: List of arrays for pixel-wise lifetime.
     - time_list: List of timestamps.
     - lat: 2D lat array from first timestep.
@@ -430,7 +438,7 @@ def track_mcs(
     merge_split_cluster_ids = {}
     next_cluster_id = 1
 
-    mcs_id_list = []
+    mcs_ids_list = []
     lifetime_list = []
     time_list = []
     lat = None
@@ -469,7 +477,7 @@ def track_mcs(
 
             # We already have zeros in mcs_id, mcs_lifetime
             # Just append them to the final output lists and continue
-            mcs_id_list.append(mcs_id)
+            mcs_ids_list.append(mcs_id)
             lifetime_list.append(mcs_lifetime)
             time_list.append(current_time)
             continue
@@ -492,7 +500,9 @@ def track_mcs(
                     mcs_lifetime,
                 )
                 previous_cluster_ids[label] = assigned_id
-                merge_split_cluster_ids[label] = assigned_id  #  Assign all clusters to themselves in the first timestep
+                merge_split_cluster_ids[
+                    label
+                ] = assigned_id  #  Assign all clusters to themselves in the first timestep
         else:
             # Subsequent timesteps
             # PSEUDOCODE for the "subsequent timesteps" part in track_mcs:
@@ -502,7 +512,7 @@ def track_mcs(
                 previous_labeled_regions,
                 final_labeled_regions,
                 previous_cluster_ids,
-                overlap_threshold=10
+                overlap_threshold=10,
             )
 
             temp_assigned = {}  # new_label -> chosen ID (merging/continuation/new)
@@ -521,7 +531,7 @@ def track_mcs(
                         mcs_lifetime=mcs_lifetime,
                         lifetime_dict=lifetime_dict,
                         max_area_dict=max_area_dict,
-                        grid_cell_area_km2=grid_cell_area_km2
+                        grid_cell_area_km2=grid_cell_area_km2,
                     )
                     temp_assigned[new_lbl] = chosen_id
                 else:
@@ -537,7 +547,7 @@ def track_mcs(
                         lifetime_dict=lifetime_dict,
                         max_area_dict=max_area_dict,
                         grid_cell_area_km2=grid_cell_area_km2,
-                        nmaxmerge=nmaxmerge
+                        nmaxmerge=nmaxmerge,
                     )
                     temp_assigned[new_lbl] = chosen_id
 
@@ -550,7 +560,7 @@ def track_mcs(
                     max_area_dict,
                     mcs_id,
                     mcs_lifetime,
-                    grid_cell_area_km2
+                    grid_cell_area_km2,
                 )
                 temp_assigned.update(new_assign_map)
 
@@ -576,24 +586,21 @@ def track_mcs(
                             lifetime_dict=lifetime_dict,
                             max_area_dict=max_area_dict,
                             grid_cell_area_km2=grid_cell_area_km2,
-                            nmaxsplit=nmaxmerge
+                            nmaxsplit=nmaxmerge,
                         )
                         # splitted_map : { new_lbl : final ID }
                         # update temp_assigned with splitted_map
                         for nl, final_id in splitted_map.items():
                             temp_assigned[nl] = final_id
 
-                        
-
                 # finalize current_cluster_ids => { new_label : final track ID }
                 current_cluster_ids = temp_assigned
                 previous_cluster_ids = current_cluster_ids
 
-            
         previous_labeled_regions = final_labeled_regions.copy()
-        
+
         # Append results
-        mcs_id_list.append(mcs_id)
+        mcs_ids_list.append(mcs_id)
         lifetime_list.append(mcs_lifetime)
         time_list.append(current_time)
 
@@ -606,7 +613,7 @@ def track_mcs(
         ]
 
     return (
-        mcs_id_list,
+        mcs_ids_list,
         main_mcs_ids,
         lifetime_list,
         time_list,

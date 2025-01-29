@@ -121,14 +121,14 @@ def load_detection_results(input_filepath):
 
 
 def save_tracking_results_to_netcdf(
-    mcs_detected_list, mcs_id_list, lifetime_list, time_list, lat, lon, output_dir
+    mcs_id_list, main_mcs_id_list, lifetime_list, time_list, lat, lon, output_dir
 ):
     """
     Save tracking results to a NetCDF file.
 
     Parameters:
-    - mcs_detected_list: List of MCS detection arrays (binary), each of shape (y, x).
-    - mcs_id_list: List of MCS ID arrays, each of shape (y, x).
+    - mcs_id_list: List of MCS detection arrays (binary), each of shape (y, x), incl merging and splitting clusters.
+    - main_mcs_id_list: List of MCS ID arrays, each of shape (y, x).
     - time_list: List of timestamps.
     - lat: 2D array of latitudes, shape (y, x).
     - lon: 2D array of longitudes, shape (y, x).
@@ -138,15 +138,15 @@ def save_tracking_results_to_netcdf(
     os.makedirs(output_dir, exist_ok=True)
 
     # Stack the mcs_detected_list and mcs_id_list along the time dimension
-    mcs_detected_all = np.stack(mcs_detected_list, axis=0)  # Shape: (time, y, x)
-    mcs_id_all = np.stack(mcs_id_list, axis=0)  # Shape: (time, y, x)
+    mcs_id = np.stack(mcs_id_list, axis=0)  # Shape: (time, y, x)
+    main_mcs_id = np.stack(main_mcs_id_list, axis=0)  # Shape: (time, y, x)
     lifetime_all = np.stack(lifetime_list, axis=0)  # Shape: (time, y, x)
 
     # Create an xarray Dataset
     ds = xr.Dataset(
         {
-            "mcs_detected": (["time", "y", "x"], mcs_detected_all),
-            "mcs_id": (["time", "y", "x"], mcs_id_all),
+            "mcs_id": (["time", "y", "x"], mcs_id),
+            "main_mcs_id": (["time", "y", "x"], main_mcs_id),
             "lifetime": (["time", "y", "x"], lifetime_all),
         },
         coords={
@@ -159,9 +159,13 @@ def save_tracking_results_to_netcdf(
     )
 
     # Set attributes
-    ds["mcs_detected"].attrs["description"] = "Binary mask of detected MCSs"
-    ds["mcs_id"].attrs["description"] = "Unique IDs of tracked MCSs"
-    ds["lifetime"].attrs["description"] = "Lifetime of MCSs in time steps"
+    ds["mcs_id"].attrs[
+        "description"
+    ] = "Binary mask of detected MCSs incl merging and splitting clusters"
+    ds["main_mcs_id"].attrs[
+        "description"
+    ] = "Unique IDs of tracked MCSs, only contains main tracks"
+    ds["lifetime"].attrs["description"] = "Lifetime of all clusters in time steps"
     ds["lat"].attrs["description"] = "Latitude coordinate"
     ds["lon"].attrs["description"] = "Longitude coordinate"
     ds.attrs["title"] = "MCS Tracking Results"

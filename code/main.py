@@ -173,13 +173,12 @@ def main():
     # Perform tracking
     print("Tracking of MCS...")
     (
-        mcs_detected_list,
-        mcs_id_list,
+        mcs_ids_list,
+        main_mcs_ids,
         lifetime_list,
         time_list,
         lat,
         lon,
-        main_mcs_ids,
         merging_events,
         splitting_events,
     ) = track_mcs(
@@ -191,12 +190,12 @@ def main():
     )
     print("Tracking of MCS finished.")
 
-    mcs_id_list_filtered = filter_main_mcs(mcs_id_list, main_mcs_ids)
+    main_mcs_ids_list = filter_main_mcs(mcs_ids_list, main_mcs_ids)
 
     # Save tracking results (use filtered lists if desired)
     save_tracking_results_to_netcdf(
-        mcs_detected_list,
-        mcs_id_list_filtered,
+        mcs_ids_list,
+        main_mcs_ids_list,
         lifetime_list,
         time_list,
         lat,
