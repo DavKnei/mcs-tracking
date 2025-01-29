@@ -69,10 +69,7 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
 
 
 def morphological_expansion_with_merging(
-    core_labels,
-    precip,
-    expand_threshold=0.1,
-    max_iterations=80
+    core_labels, precip, expand_threshold=0.1, max_iterations=80
 ):
     """
     Performs iterative morphological expansion of labeled cores. In each iteration:
@@ -111,7 +108,7 @@ def morphological_expansion_with_merging(
 
         # Morphologically dilate each label by 1 step
         for lbl in expansions:
-            feature_mask = (core_labels == lbl)
+            feature_mask = core_labels == lbl
             dilated_mask = binary_dilation(feature_mask, structure=structure)
             # Only accept new pixels where precip >= expand_threshold
             new_pixels = dilated_mask & (~feature_mask) & (precip >= expand_threshold)
@@ -176,6 +173,7 @@ def morphological_expansion_with_merging(
 
     return core_labels
 
+
 def unify_merge_sets(merges):
     """
      Merges overlapping sets of labels transitively.
@@ -221,7 +219,9 @@ def unify_merge_sets(merges):
     return merged
 
 
-def unify_checkerboard_simple(core_labels, precip, threshold=0.1, max_passes=10):  # TODO: should not be necessary if morphological_expansion_with_merging is working correctly
+def unify_checkerboard_simple(
+    core_labels, precip, threshold=0.1, max_passes=10
+):  # TODO: should not be necessary if morphological_expansion_with_merging is working correctly
     """
     A simpler “lowest‐label‐wins” approach to fix checkerboard patterns by
     repeatedly scanning for local adjacencies where a pixel can unify to a smaller label.
@@ -262,9 +262,7 @@ def unify_checkerboard_simple(core_labels, precip, threshold=0.1, max_passes=10)
     passes = 0
 
     # Offsets for 8-neighborhood
-    neighbors_8 = [(-1, -1), (-1, 0), (-1, 1),
-                   (0, -1),           (0, 1),
-                   (1, -1),  (1, 0),  (1, 1)]
+    neighbors_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
     while changed and passes < max_passes:
         changed = False
@@ -280,7 +278,7 @@ def unify_checkerboard_simple(core_labels, precip, threshold=0.1, max_passes=10)
                 val_rc = precip[r, c]
                 # Check 8 neighbors
                 for dr, dc in neighbors_8:
-                    rr, cc = r+dr, c+dc
+                    rr, cc = r + dr, c + dc
                     if 0 <= rr < nrows and 0 <= cc < ncols:
                         neighbor_lbl = core_labels[rr, cc]
                         if neighbor_lbl > 0 and neighbor_lbl < lbl:

@@ -22,8 +22,8 @@ def smooth_precipitation_field(precipitation, kernel_size=2):
     """
     kernel = np.ones((kernel_size, kernel_size), dtype=float)
     kernel /= kernel.sum()
-    return fftconvolve(precipitation, kernel, mode='same')
-  
+    return fftconvolve(precipitation, kernel, mode="same")
+
 
 def cluster_with_hdbscan(latitudes, longitudes, precipitation_mask, min_cluster_size):
     """
