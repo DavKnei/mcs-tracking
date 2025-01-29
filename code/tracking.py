@@ -253,9 +253,6 @@ def handle_merging(
     merging_events,
     final_labeled_regions,
     current_time,
-    mcs_id,
-    mcs_lifetime,
-    lifetime_dict,
     max_area_dict,
     grid_cell_area_km2,
     nmaxmerge=5
@@ -334,10 +331,10 @@ def handle_splitting(
 
     # the rest => new IDs
     splitted_assign_map = {}
-
+    
     # unify keep_label => old_track_id
     splitted_assign_map[keep_label] = old_track_id
-    lifetime_dict[old_track_id] += 1
+    lifetime_dict[old_track_id] -= 1  #  TODO: Weird error in splitting lifetime is 2 to high. lifetime_dict only gets updated +1 in handle_continuation. This fixes it for now.
     if keep_area > max_area_dict[old_track_id]:
         max_area_dict[old_track_id] = keep_area
 
@@ -345,7 +342,7 @@ def handle_splitting(
     keep_mask = (final_labeled_regions == keep_label)
     mcs_id[keep_mask] = old_track_id
     mcs_lifetime[keep_mask] = lifetime_dict[old_track_id]
-
+    
     splitted_child_labels = []
     splitted_child_areas = []
 
@@ -364,9 +361,11 @@ def handle_splitting(
         splitted_child_labels.append(next_cluster_id)
         splitted_child_areas.append(area_s)
         next_cluster_id += 1
-
+    
     # record a SplittingEvent if we have more than 1 new label
     if splitting_events is not None and len(new_label_list) > 1:
+        if len(new_label_list) > nmaxsplit:
+            new_label_list = new_label_list[:nmaxsplit]
         sevt = SplittingEvent(
             time=current_time,
             parent_id=old_track_id,
@@ -441,9 +440,6 @@ def track_mcs(
 
     lifetime_dict = defaultdict(int)
     max_area_dict = defaultdict(float)
-
-    merge_into_MCS_ids = defaultdict(list)
-    split_off_MCS_ids = defaultdict(list)
 
     merging_events = []
     splitting_events = []
@@ -592,12 +588,15 @@ def track_mcs(
                         for nl, final_id in splitted_map.items():
                             temp_assigned[nl] = final_id
 
+                        
+
                 # finalize current_cluster_ids => { new_label : final track ID }
                 current_cluster_ids = temp_assigned
                 previous_cluster_ids = current_cluster_ids
 
+            
         previous_labeled_regions = final_labeled_regions.copy()
-
+        
         # Append results
         mcs_detected_list.append(mcs_detected)
         mcs_id_list.append(mcs_id)
@@ -611,7 +610,6 @@ def track_mcs(
             if total_lifetime_dict[uid] >= main_lifetime_thresh
             and max_area_dict.get(uid, 0) >= main_area_thresh
         ]
-
     return (
         mcs_detected_list,
         mcs_id_list,
