@@ -415,7 +415,6 @@ def track_mcs(
     - nmaxmerge: Max allowed number of clusters in a merge/split.
 
     Returns:
-    - mcs_detected_list: List of binary arrays per timestep (MCS detected =1).
     - mcs_id_list: List of ID arrays per timestep.
     - lifetime_list: List of arrays for pixel-wise lifetime.
     - time_list: List of timestamps.
@@ -431,7 +430,6 @@ def track_mcs(
     merge_split_cluster_ids = {}
     next_cluster_id = 1
 
-    mcs_detected_list = []
     mcs_id_list = []
     lifetime_list = []
     time_list = []
@@ -455,7 +453,6 @@ def track_mcs(
             lat = current_lat
             lon = current_lon
 
-        mcs_detected = np.zeros_like(final_labeled_regions, dtype=np.int8)
         mcs_id = np.zeros_like(final_labeled_regions, dtype=np.int32)
         mcs_lifetime = np.zeros_like(final_labeled_regions, dtype=np.int32)
 
@@ -470,9 +467,8 @@ def track_mcs(
             previous_cluster_ids = {}
             previous_labeled_regions = None  # or keep it zero as well
 
-            # We already have zeros in mcs_detected, mcs_id, mcs_lifetime
+            # We already have zeros in mcs_id, mcs_lifetime
             # Just append them to the final output lists and continue
-            mcs_detected_list.append(mcs_detected)
             mcs_id_list.append(mcs_id)
             lifetime_list.append(mcs_lifetime)
             time_list.append(current_time)
@@ -497,7 +493,6 @@ def track_mcs(
                 )
                 previous_cluster_ids[label] = assigned_id
                 merge_split_cluster_ids[label] = assigned_id  #  Assign all clusters to themselves in the first timestep
-                mcs_detected[cluster_mask] = 1
         else:
             # Subsequent timesteps
             # PSEUDOCODE for the "subsequent timesteps" part in track_mcs:
@@ -598,7 +593,6 @@ def track_mcs(
         previous_labeled_regions = final_labeled_regions.copy()
         
         # Append results
-        mcs_detected_list.append(mcs_detected)
         mcs_id_list.append(mcs_id)
         lifetime_list.append(mcs_lifetime)
         time_list.append(current_time)
@@ -610,14 +604,14 @@ def track_mcs(
             if total_lifetime_dict[uid] >= main_lifetime_thresh
             and max_area_dict.get(uid, 0) >= main_area_thresh
         ]
+
     return (
-        mcs_detected_list,
         mcs_id_list,
+        main_mcs_ids,
         lifetime_list,
         time_list,
         lat,
         lon,
-        main_mcs_ids,
         merging_events,
         splitting_events,
     )
