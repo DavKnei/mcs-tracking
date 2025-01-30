@@ -327,7 +327,6 @@ def handle_splitting(
 
     # The largest child keeps old_track_id
     splitted_assign_map[keep_label] = old_track_id
-    # decrement lifetime to fix "Weird error" note:
     lifetime_dict[old_track_id] -= 1  # Patch for double counting
     if keep_area > max_area_dict[old_track_id]:
         max_area_dict[old_track_id] = keep_area
@@ -399,7 +398,11 @@ def track_mcs(
 
     Args:
         detection_results (List[dict]): Each dict contains:
-            "final_labeled_regions", "time", "lat", "lon".
+            "final_labeled_regions" (2D array of labels),
+            "center_points" (dict mapping label->(lat, lon)), optional
+            "time" (datetime.datetime),
+            "lat" (2D array),
+            "lon" (2D array).
         main_lifetime_thresh (int): Minimum lifetime for main MCS (in timesteps).
         main_area_thresh (float): Minimum area (km²) for main MCS.
         grid_cell_area_km2 (float): Factor to convert pixel count to area (km²).
@@ -415,6 +418,8 @@ def track_mcs(
             lon (numpy.ndarray): 2D lon array from the first timestep.
             merging_events (List[MergingEvent]): All recorded merges.
             splitting_events (List[SplittingEvent]): All recorded splits.
+            tracking_centers_list (List[dict]): For each timestep, a dict mapping
+                track_id -> (center_lat, center_lon).
     """
     previous_labeled_regions = None
     previous_cluster_ids = {}
@@ -423,6 +428,7 @@ def track_mcs(
 
     mcs_ids_list = []
     lifetime_list = []
+    tracking_centers_list = []
     time_list = []
     lat = None
     lon = None
@@ -434,8 +440,11 @@ def track_mcs(
     splitting_events = []
 
     for idx, detection_result in enumerate(detection_results):
+        # Unpack relevant info from detection_result
         final_labeled_regions = detection_result["final_labeled_regions"]
-
+        center_points_dict = detection_result.get(
+            "center_points", {}
+        )  # label -> (lat, lon)
         current_time = detection_result["time"]
         current_lat = detection_result["lat"]
         current_lon = detection_result["lon"]
@@ -450,7 +459,7 @@ def track_mcs(
         unique_labels = np.unique(final_labeled_regions)
         unique_labels = unique_labels[unique_labels != -1]
 
-        # If no valid clusters => end all tracks
+        # If no valid clusters => end all tracks for this timestep
         if len(unique_labels) == 0:
             print(f"No clusters detected at {current_time}")
             previous_cluster_ids = {}
@@ -459,8 +468,13 @@ def track_mcs(
             mcs_ids_list.append(mcs_id)
             lifetime_list.append(mcs_lifetime)
             time_list.append(current_time)
+
+            # Also append empty center dictionary for this timestep
+            tracking_centers_list.append({})
             continue
 
+        # --------------------------------------------------------------
+        # If we do have clusters, proceed:
         if previous_labeled_regions is None:
             # First timestep with actual clusters
             for label in unique_labels:
@@ -488,15 +502,14 @@ def track_mcs(
             )
 
             temp_assigned = {}
-            # we do the merges/continuation/no-overlap in a single pass:
             labels_no_overlap = []
 
             for new_lbl, old_ids in overlap_map.items():
                 if len(old_ids) == 0:
                     labels_no_overlap.append(new_lbl)
                 elif len(old_ids) == 1:
-                    # single overlap => continuation
                     chosen_id = old_ids[0]
+                    # continuation
                     handle_continuation(
                         new_label=new_lbl,
                         old_track_id=chosen_id,
@@ -523,7 +536,6 @@ def track_mcs(
                         grid_cell_area_km2=grid_cell_area_km2,
                         nmaxmerge=nmaxmerge,
                     )
-                    # unify the new label => chosen_id
                     mask = final_labeled_regions == new_lbl
                     mcs_id[mask] = chosen_id
                     lifetime_dict[chosen_id] += 1
@@ -542,15 +554,13 @@ def track_mcs(
             )
             temp_assigned.update(new_assign_map)
 
-            # now check if from old perspective => splits
-            # invert temp_assigned => old_id -> list of new labels
+            # check old perspective => splits
             oldid_to_newlist = defaultdict(list)
             for lbl, tid in temp_assigned.items():
                 oldid_to_newlist[tid].append(lbl)
 
             for old_id, newlbls in oldid_to_newlist.items():
                 if len(newlbls) > 1:
-                    # immediate splitting => handle_splitting
                     splitted_map, next_cluster_id = handle_splitting(
                         old_id,
                         newlbls,
@@ -573,9 +583,36 @@ def track_mcs(
 
         previous_labeled_regions = final_labeled_regions.copy()
 
+        # --------------------------------------------------------------
+        # Build final arrays for this timestep
         mcs_ids_list.append(mcs_id)
         lifetime_list.append(mcs_lifetime)
         time_list.append(current_time)
+
+        # -------------- Add code to unify detection label centers -> track IDs --------------
+        # Dictionary { track_id : (lat, lon) } for each timestep
+        centers_this_timestep = {}
+
+        # Group detection labels by track ID
+        label_by_cluster = defaultdict(list)
+        for lbl, tid in previous_cluster_ids.items():
+            label_by_cluster[tid].append(lbl)
+
+        # For each track_id, pick a detection label's center (if any) from center_points_dict
+        # If multiple detection labels unify => pick the first with a known center
+        for tid, label_list in label_by_cluster.items():
+            # default center = (None, None) if none found
+            center_latlon = (None, None)
+            for detect_label in label_list:
+                # detection_result["center_points"] might store them as strings for JSON:
+                detect_label_str = str(detect_label)
+                if detect_label_str in center_points_dict:
+                    center_latlon = center_points_dict[detect_label_str]
+                    break
+            centers_this_timestep[str(tid)] = center_latlon  # store as string for JSON
+
+        tracking_centers_list.append(centers_this_timestep)
+        # --------------------------------------------------------------
 
         # compute main_mcs_ids after each step
         total_lifetime_dict = lifetime_dict
@@ -595,4 +632,5 @@ def track_mcs(
         lon,
         merging_events,
         splitting_events,
+        tracking_centers_list,
     )

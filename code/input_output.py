@@ -182,7 +182,7 @@ def load_detection_results(input_filepath):
             "time": time_val,
             "lat": lat,
             "lon": lon,
-            "center_points": center_points_dict
+            "center_points": center_points_dict,
         }
         detection_results.append(detection_result)
 
@@ -192,28 +192,59 @@ def load_detection_results(input_filepath):
     return detection_results
 
 
-
 def save_tracking_results_to_netcdf(
-    mcs_id_list, main_mcs_id_list, lifetime_list, time_list, lat, lon, output_dir
+    mcs_id_list,
+    main_mcs_id_list,
+    lifetime_list,
+    time_list,
+    lat,
+    lon,
+    tracking_centers_list,
+    output_dir,
 ):
     """
-    Save tracking results to a NetCDF file.
+    Save tracking results (including center points) to a NetCDF file.
 
-    Parameters:
-    - mcs_id_list: List of MCS detection arrays (binary), each of shape (y, x), incl merging and splitting clusters.
-    - main_mcs_id_list: List of MCS ID arrays, each of shape (y, x).
-    - time_list: List of timestamps.
-    - lat: 2D array of latitudes, shape (y, x).
-    - lon: 2D array of longitudes, shape (y, x).
-    - output_dir: Directory to save the NetCDF file.
+    This function stacks the following data along the time dimension:
+      - mcs_id_list: Full MCS track IDs (including merges/splits)
+      - main_mcs_id_list: Filtered MCS track IDs for main systems
+      - lifetime_list: Per-pixel lifetime arrays
+
+    In addition, it stores the track centers for each timestep in two sets of
+    JSON attributes:
+      1. center_points_t{i}   => The full center dictionary for all track IDs
+      2. center_points_main_t{i} => A filtered center dictionary only for the main MCS IDs
+
+    Args:
+        mcs_id_list (List[numpy.ndarray]):
+            List of 2D arrays (y, x) with full MCS track IDs (merges/splits included).
+        main_mcs_id_list (List[numpy.ndarray]):
+            List of 2D arrays (y, x) with only main MCS track IDs.
+        lifetime_list (List[numpy.ndarray]):
+            List of 2D arrays (y, x) of per-pixel lifetime values.
+        time_list (List[datetime.datetime]):
+            List of timestamps (one for each timestep).
+        lat (numpy.ndarray):
+            2D array of latitudes, shape (y, x).
+        lon (numpy.ndarray):
+            2D array of longitudes, shape (y, x).
+        tracking_centers_list (List[dict]):
+            A list (one entry per timestep) of dictionaries mapping:
+                track_id -> (center_lat, center_lon).
+            This is the full set of track centers for merges/splits.
+        output_dir (str):
+            Directory in which to save the NetCDF file.
+
+    Returns:
+        None. Writes a file named "mcs_tracking_results.nc" in the output_dir.
     """
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    # Stack the mcs_detected_list and mcs_id_list along the time dimension
-    mcs_id = np.stack(mcs_id_list, axis=0)  # Shape: (time, y, x)
-    main_mcs_id = np.stack(main_mcs_id_list, axis=0)  # Shape: (time, y, x)
-    lifetime_all = np.stack(lifetime_list, axis=0)  # Shape: (time, y, x)
+    # Stack arrays along the time dimension
+    mcs_id = np.stack(mcs_id_list, axis=0)  # (time, y, x)
+    main_mcs_id = np.stack(main_mcs_id_list, axis=0)  # (time, y, x)
+    lifetime_all = np.stack(lifetime_list, axis=0)  # (time, y, x)
 
     # Create an xarray Dataset
     ds = xr.Dataset(
@@ -226,21 +257,23 @@ def save_tracking_results_to_netcdf(
             "time": time_list,
             "y": np.arange(lat.shape[0]),
             "x": np.arange(lat.shape[1]),
-            "lat": (["y", "x"], lat),
-            "lon": (["y", "x"], lon),
         },
     )
 
-    # Set attributes
+    # Attach lat/lon as data variables
+    ds["lat"] = (("y", "x"), lat)
+    ds["lon"] = (("y", "x"), lon)
+
+    # Set attributes for each variable
     ds["mcs_id"].attrs[
         "description"
-    ] = "Binary mask of detected MCSs incl merging and splitting clusters"
-    ds["main_mcs_id"].attrs[
-        "description"
-    ] = "Unique IDs of tracked MCSs, only contains main tracks"
-    ds["lifetime"].attrs["description"] = "Lifetime of all clusters in time steps"
+    ] = "Track IDs of all MCSs (including merges and splits)"
+    ds["main_mcs_id"].attrs["description"] = "Track IDs of main MCSs (filtered subset)"
+    ds["lifetime"].attrs["description"] = "Lifetime of all clusters (in timesteps)"
     ds["lat"].attrs["description"] = "Latitude coordinate"
     ds["lon"].attrs["description"] = "Longitude coordinate"
+
+    # Set global attributes
     ds.attrs["title"] = "MCS Tracking Results"
     ds.attrs[
         "institution"
@@ -249,8 +282,30 @@ def save_tracking_results_to_netcdf(
     ds.attrs["history"] = f"Created on {datetime.datetime.now()}"
     ds.attrs["references"] = "David Kneidinger <david.kneidinger@uni-graz.at>"
 
-    # Save to NetCDF file
+    # Store center points in JSON attributes for each timestep
+    # 1) Full track center points: center_points_t{i}
+    # 2) Main track center points: center_points_main_t{i}, filtered by main_mcs_id
+    num_timesteps = len(time_list)
+    for i in range(num_timesteps):
+        full_centers_dict = tracking_centers_list[i]  # track_id -> (lat, lon)
+        full_centers_json = json.dumps(full_centers_dict)
+        ds["mcs_id"].attrs[f"center_points_t{i}"] = full_centers_json
+
+        # Filter the dictionary to only main track IDs that appear at this timestep
+        # We identify them by scanning main_mcs_id[i]
+        main_ids_2d = main_mcs_id[i]
+        used_main_ids = np.unique(main_ids_2d)
+        used_main_ids = used_main_ids[used_main_ids != 0]
+
+        main_centers_dict = {}
+        for tid in used_main_ids:
+            if tid in full_centers_dict:
+                main_centers_dict[tid] = full_centers_dict[tid]
+
+        main_centers_json = json.dumps(main_centers_dict)
+        ds["main_mcs_id"].attrs[f"center_points_main_t{i}"] = main_centers_json
+
+    # Save the NetCDF file
     output_filepath = os.path.join(output_dir, "mcs_tracking_results.nc")
     ds.to_netcdf(output_filepath)
-
     print(f"Saved tracking results to {output_filepath}")

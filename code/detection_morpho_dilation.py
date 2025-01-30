@@ -572,13 +572,13 @@ def detect_mcs_in_file(
         final_labeled_regions, lat, lon, grid_spacing_km
     )
 
-    # Step 8: Classify MCS types
-    mcs_classification = classify_mcs_types(shape_features)
-
-    # Step 9: Compute cluster centers of mass
+    # Step 8: Compute cluster centers of mass
     cluster_centers = compute_cluster_centers_of_mass(
         final_labeled_regions, lat, lon, precipitation
     )
+
+    # Step 9: Classify MCS types
+    mcs_classification = classify_mcs_types(shape_features)
 
     # Make final labeled regions that are no cluster to be -1
     final_labeled_regions[

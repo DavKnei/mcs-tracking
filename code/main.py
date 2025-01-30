@@ -181,6 +181,7 @@ def main():
         lon,
         merging_events,
         splitting_events,
+        tracking_centers_list,
     ) = track_mcs(
         detection_results,
         main_lifetime_thresh,
@@ -200,6 +201,7 @@ def main():
         time_list,
         lat,
         lon,
+        tracking_centers_list,
         tracking_output_dir,
     )
 
