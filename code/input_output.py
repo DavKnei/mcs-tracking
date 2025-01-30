@@ -113,13 +113,26 @@ def save_detection_results(detection_results, output_filepath):
 
 def load_detection_results(input_filepath):
     """
-    Load detection results from a NetCDF file.
+    Load detection results from a NetCDF file, including each timestep's center-of-mass
+    information if present.
 
-    Parameters:
-    - input_filepath: Path to the input NetCDF file.
+    This function looks for JSON attributes named "center_points_t{i}" in the
+    "final_labeled_regions" variable for each timestep i, and parses them into a
+    dictionary stored in detection_result["center_points"].
+
+    Args:
+        input_filepath (str): Path to the input NetCDF file.
 
     Returns:
-    - detection_results: List of detection_result dictionaries.
+        List[dict]: A list of detection_result dictionaries, where each dictionary
+            contains:
+              - "final_labeled_regions": 2D array of labels (int)
+              - "time": Timestamp or datetime-like
+              - "lat": 2D array of latitudes
+              - "lon": 2D array of longitudes
+              - "center_points": (optional) dict { label_value : (center_lat, center_lon) }
+                if present in the file.
+        or None if loading fails.
     """
     if not os.path.exists(input_filepath):
         print(f"File {input_filepath} does not exist.")
@@ -131,10 +144,10 @@ def load_detection_results(input_filepath):
         print(f"Error opening {input_filepath}: {e}")
         return None
 
-    # Check if required variables are present
+    # Check if required data variables are present
     required_vars = ["final_labeled_regions", "lat", "lon", "time"]
     for var in required_vars:
-        if var not in ds.variables:
+        if var not in ds.variables and var not in ds.coords:
             print(f"Variable {var} not found in {input_filepath}.")
             return None
 
@@ -144,18 +157,40 @@ def load_detection_results(input_filepath):
     lat = ds["lat"].values
     lon = ds["lon"].values
 
+    # Prepare detection_results list
     detection_results = []
-    for idx, time in enumerate(times):
+    n_times = final_labeled_regions_array.shape[0]
+
+    for idx in range(n_times):
+        # Create a detection result dictionary for this timestep
+        time_val = times[idx]
+        labeled_regions_2d = final_labeled_regions_array[idx]
+
+        # Attempt to parse center-of-mass JSON attribute for this timestep
+        center_key = f"center_points_t{idx}"
+        if center_key in ds["final_labeled_regions"].attrs:
+            center_points_json = ds["final_labeled_regions"].attrs[center_key]
+            try:
+                center_points_dict = json.loads(center_points_json)
+            except json.JSONDecodeError:
+                center_points_dict = {}
+        else:
+            center_points_dict = {}
+
         detection_result = {
-            "final_labeled_regions": final_labeled_regions_array[idx],
-            "time": time,
+            "final_labeled_regions": labeled_regions_2d,
+            "time": time_val,
             "lat": lat,
             "lon": lon,
+            "center_points": center_points_dict
         }
         detection_results.append(detection_result)
 
+    ds.close()
     print(f"Detection results loaded from {input_filepath}")
+
     return detection_results
+
 
 
 def save_tracking_results_to_netcdf(
