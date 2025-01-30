@@ -1,15 +1,11 @@
 import numpy as np
-import xarray as xr
 import hdbscan
 from scipy.signal import fftconvolve
 from scipy.ndimage import (
-    distance_transform_edt,
     binary_dilation,
     generate_binary_structure,
 )
-from skimage.feature import peak_local_max
-from skimage.segmentation import watershed
-from skimage.measure import regionprops, label
+from skimage.measure import regionprops
 from collections import defaultdict
 from input_output import load_data
 
@@ -336,55 +332,75 @@ def filter_mcs_candidates(
 
 
 def extract_shape_features(clusters, lat, lon, grid_spacing_km):
-    """
-    Extract shape features from detected clusters.
+    """Extracts shape features (e.g., area, perimeter, axes) from labeled clusters.
 
-    Parameters:
-    - clusters: 2D array of cluster labels.
-    - lat, lon: 2D arrays of latitude and longitude.
-    - grid_spacing_km: Approximate grid spacing in kilometers.
+    Args:
+        clusters (numpy.ndarray):
+            2D array of integer cluster labels (0 indicates background/no cluster).
+        lat (numpy.ndarray):
+            2D array of latitudes, same shape as `clusters`.
+        lon (numpy.ndarray):
+            2D array of longitudes, same shape as `clusters`.
+        grid_spacing_km (float):
+            Approximate grid spacing in kilometers for converting pixel-based measurements
+            (like area in pixel count) into km².
 
     Returns:
-    - shape_features: Dictionary with cluster labels as keys and feature dictionaries as values.
+        dict:
+            A dictionary `shape_features` mapping each nonzero cluster label to a
+            dictionary of shape properties. For example:
+
+            shape_features[label_value] = {
+                "area_km2": ...,
+                "perimeter_km": ...,
+                "major_axis_length_km": ...,
+                "minor_axis_length_km": ...,
+                "aspect_ratio": ...,
+                "orientation_deg": ...,
+                "solidity": ...,
+                "eccentricity": ...,
+                "extent": ...,
+                "convex_area_km2": ...,
+                "circularity": ...,
+            }
     """
     shape_features = {}
-    # Label clusters for regionprops
+
     labeled_clusters = clusters.astype(int)
     cluster_labels = np.unique(labeled_clusters)
-    cluster_labels = cluster_labels[cluster_labels != 0]  # Exclude background
+    cluster_labels = cluster_labels[cluster_labels != 0]  # Exclude background label = 0
 
     for label_value in cluster_labels:
         cluster_mask = labeled_clusters == label_value
-        # Convert mask to binary image
         binary_image = cluster_mask.astype(int)
 
-        # Compute region properties
+        # Compute region properties via skimage
         props_list = regionprops(binary_image)
         if len(props_list) == 0:
-            continue  # Skip if no properties are found
-        props = props_list[0]  # There should be only one region in the mask
+            continue
+        props = props_list[0]  # Should be only one region per label_value
 
-        # Extract features
-        area = props.area * (grid_spacing_km**2)  # Convert to km²
-        perimeter = props.perimeter * grid_spacing_km  # Convert to km
+        # Convert region measurements to physical units
+        area = props.area * (grid_spacing_km**2)  # km²
+        perimeter = props.perimeter * grid_spacing_km  # km
         major_axis_length = props.major_axis_length * grid_spacing_km
         minor_axis_length = props.minor_axis_length * grid_spacing_km
+
+        # Derived shape features
         aspect_ratio = (
             major_axis_length / minor_axis_length if minor_axis_length != 0 else np.nan
         )
-        orientation = props.orientation  # In radians
-        solidity = props.solidity  # Convexity
-        eccentricity = props.eccentricity  # Elongation measure
-        extent = props.extent  # Ratio of area to bounding box area
+        orientation_deg = np.degrees(props.orientation) % 360
+        solidity = props.solidity
+        eccentricity = props.eccentricity
+        extent = props.extent
         convex_area = props.convex_area * (grid_spacing_km**2)
-        circularity = (
-            (4 * np.pi * area) / (perimeter**2) if perimeter != 0 else np.nan
-        )
+        if perimeter != 0:
+            circularity = (4.0 * np.pi * area) / (perimeter**2)
+        else:
+            circularity = np.nan
 
-        # Convert orientation to degrees and adjust range
-        orientation_deg = np.degrees(orientation)
-        orientation_deg = (orientation_deg + 360) % 360
-
+        # Store base shape metrics
         shape_features[label_value] = {
             "area_km2": area,
             "perimeter_km": perimeter,
@@ -400,6 +416,48 @@ def extract_shape_features(clusters, lat, lon, grid_spacing_km):
         }
 
     return shape_features
+
+
+def compute_cluster_centers_of_mass(final_labeled_regions, lat, lon, precipitation):
+    """Computes the precipitation-weighted center of mass for each labeled cluster.
+
+    Args:
+        final_labeled_regions (numpy.ndarray):
+            2D integer array of cluster labels (excluding -1 or 0 for background).
+        lat (numpy.ndarray):
+            2D array of latitudes, same shape as final_labeled_regions.
+        lon (numpy.ndarray):
+            2D array of longitudes, same shape as final_labeled_regions.
+        precipitation (numpy.ndarray):
+            2D array of precipitation values, same shape as final_labeled_regions.
+
+    Returns:
+        dict:
+            A dictionary mapping 'label_value' -> (center_lat, center_lon) in degrees.
+            If a cluster has zero total precipitation, we store (np.nan, np.nan).
+    """
+    cluster_centers = {}
+    unique_labels = np.unique(final_labeled_regions)
+    # Exclude background label if it's 0 or -1
+    unique_labels = unique_labels[unique_labels > 0]
+
+    for label_value in unique_labels:
+        mask = final_labeled_regions == label_value
+        # precipitation for this cluster only
+        cluster_precip = np.where(mask, precipitation, 0.0)
+        total_precip = np.sum(cluster_precip)
+
+        if total_precip > 0:
+            lat_weighted = np.sum(lat * cluster_precip)
+            lon_weighted = np.sum(lon * cluster_precip)
+            center_lat = lat_weighted / total_precip
+            center_lon = lon_weighted / total_precip
+            cluster_centers[label_value] = (center_lat, center_lon)
+        else:
+            # If zero total precipitation, we cannot define a weighted center
+            cluster_centers[label_value] = (np.nan, np.nan)
+
+    return cluster_centers
 
 
 def classify_mcs_types(shape_features):
@@ -516,6 +574,11 @@ def detect_mcs_in_file(
     # Step 8: Classify MCS types
     mcs_classification = classify_mcs_types(shape_features)
 
+    # Step 9: Compute cluster centers of mass
+    cluster_centers = compute_cluster_centers_of_mass(
+        final_labeled_regions, lat, lon, precipitation
+    )
+
     # Make final labeled regions that are no cluster to be -1
     final_labeled_regions[
         final_labeled_regions == 0
@@ -532,7 +595,6 @@ def detect_mcs_in_file(
         "precipitation": precipitation_smooth,
         "time": ds["time"].values,
         "convective_plumes": core_labels,
-        "shape_features": shape_features,
-        "mcs_classification": mcs_classification,
+        "center_points": cluster_centers,
     }
     return detection_result
