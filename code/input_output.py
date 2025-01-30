@@ -35,6 +35,14 @@ def load_data(file_path, data_var, time_index=0):
     return ds, lat, lon, prec
 
 
+def serialize_center_points(center_points):
+    """Convert a center_points dict with float32 lat/lon to Python floats so json.dumps() works."""
+    casted_dict = {}
+    for label_str, (lat_val, lon_val) in center_points.items():
+        # Convert float32 -> float
+        casted_dict[label_str] = (float(lat_val), float(lon_val))
+    return json.dumps(casted_dict)
+
 def save_detection_results(detection_results, output_filepath):
     """Saves detection results (including per-timestep center_of_mass) to a NetCDF file.
 
@@ -69,7 +77,7 @@ def save_detection_results(detection_results, output_filepath):
         if lat is None:
             lat = detection_result["lat"]
             lon = detection_result["lon"]
-
+        
         # If 'center_points' is present, store it; else store empty
         if "center_points" in detection_result:
             center_points = detection_result["center_points"]
@@ -77,7 +85,8 @@ def save_detection_results(detection_results, output_filepath):
             center_points = {}
 
         # Convert the dict to JSON so we can store it as an attribute
-        center_points_json = json.dumps(center_points)
+        center_points_str = serialize_center_points(center_points)
+        center_points_json = json.dumps(center_points_str)
         center_points_list.append(center_points_json)
 
     # Stack the final_labeled_regions along a new time dimension
@@ -288,7 +297,8 @@ def save_tracking_results_to_netcdf(
     num_timesteps = len(time_list)
     for i in range(num_timesteps):
         full_centers_dict = tracking_centers_list[i]  # track_id -> (lat, lon)
-        full_centers_json = json.dumps(full_centers_dict)
+        full_centers_dict_str = serialize_center_points(full_centers_dict)
+        full_centers_json = json.dumps(full_centers_dict_str)
         ds["mcs_id"].attrs[f"center_points_t{i}"] = full_centers_json
 
         # Filter the dictionary to only main track IDs that appear at this timestep
