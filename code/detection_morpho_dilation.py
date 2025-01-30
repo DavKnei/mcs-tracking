@@ -440,9 +440,10 @@ def compute_cluster_centers_of_mass(final_labeled_regions, lat, lon, precipitati
     unique_labels = np.unique(final_labeled_regions)
     # Exclude background label if it's 0 or -1
     unique_labels = unique_labels[unique_labels > 0]
+    unique_labels = unique_labels.astype(str)  # Ensure keys are strings for JSON
 
     for label_value in unique_labels:
-        mask = final_labeled_regions == label_value
+        mask = final_labeled_regions == int(label_value)
         # precipitation for this cluster only
         cluster_precip = np.where(mask, precipitation, 0.0)
         total_precip = np.sum(cluster_precip)
@@ -597,4 +598,5 @@ def detect_mcs_in_file(
         "convective_plumes": core_labels,
         "center_points": cluster_centers,
     }
+
     return detection_result

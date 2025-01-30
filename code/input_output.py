@@ -2,6 +2,7 @@ import xarray as xr
 import numpy as np
 import os
 import datetime
+import json
 
 
 def load_data(file_path, data_var, time_index=0):
@@ -35,25 +36,49 @@ def load_data(file_path, data_var, time_index=0):
 
 
 def save_detection_results(detection_results, output_filepath):
-    """
-    Save detection results to a NetCDF file.
+    """Saves detection results (including per-timestep center_of_mass) to a NetCDF file.
 
-    Parameters:
-    - detection_results: List of detection_result dictionaries.
-    - output_filepath: Path to the output NetCDF file.
+    This function gathers:
+      - final_labeled_regions (stacked along time)
+      - lat and lon arrays
+      - center_points (dictionary of label -> (lat, lon)) for each timestep,
+        stored as a JSON attribute.
+
+    Args:
+        detection_results (List[dict]):
+            Each dict must contain:
+                "final_labeled_regions": 2D array of labeled clusters,
+                "lat": 2D array of latitudes,
+                "lon": 2D array of longitudes,
+                "time": Timestamp or datetime-like,
+                optionally "center_points": { label_value : (lat, lon) }.
+        output_filepath (str):
+            Path to the output NetCDF file.
     """
-    # Prepare data for saving
     times = []
     final_labeled_regions_list = []
     lat = None
     lon = None
+    center_points_list = []  # Will store JSON-encoded center points
 
     for detection_result in detection_results:
+        # Extract the required info
         times.append(detection_result["time"])
         final_labeled_regions_list.append(detection_result["final_labeled_regions"])
+
         if lat is None:
             lat = detection_result["lat"]
             lon = detection_result["lon"]
+
+        # If 'center_points' is present, store it; else store empty
+        if "center_points" in detection_result:
+            center_points = detection_result["center_points"]
+        else:
+            center_points = {}
+
+        # Convert the dict to JSON so we can store it as an attribute
+        center_points_json = json.dumps(center_points)
+        center_points_list.append(center_points_json)
 
     # Stack the final_labeled_regions along a new time dimension
     final_labeled_regions_array = np.stack(final_labeled_regions_list, axis=0)
@@ -61,12 +86,25 @@ def save_detection_results(detection_results, output_filepath):
     # Create an xarray Dataset
     ds = xr.Dataset(
         {"final_labeled_regions": (["time", "y", "x"], final_labeled_regions_array)},
-        coords={"time": times, "lat": (["y", "x"], lat), "lon": (["y", "x"], lon)},
+        coords={
+            "time": times,
+            "y": np.arange(final_labeled_regions_array.shape[1]),
+            "x": np.arange(final_labeled_regions_array.shape[2]),
+        },
         attrs={
             "description": "Detection results of MCSs",
             "note": "This file contains the final labeled regions from MCS detection.",
         },
     )
+
+    # Add lat/lon as DataArray variables (assuming lat/lon shape = (y, x))
+    ds["lat"] = (("y", "x"), lat)
+    ds["lon"] = (("y", "x"), lon)
+
+    # Store the center_points JSON for each timestep as an attribute
+    # e.g. "center_points_t0", "center_points_t1", etc.
+    for i, cp_json in enumerate(center_points_list):
+        ds["final_labeled_regions"].attrs[f"center_points_t{i}"] = cp_json
 
     # Save to NetCDF file
     ds.to_netcdf(output_filepath)
