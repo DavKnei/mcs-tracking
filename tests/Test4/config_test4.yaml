@@ -8,6 +8,7 @@ output_path: "./tests/Test4/"
 output_plot_dir: "./tests/Test4/figures/"
 tracking_output_dir: "./tests/Test4/"
 grid_size_km: 4.0
+var_name: "pr"
 
 # Detection parametersS
 min_size_threshold: 10
@@ -17,12 +18,13 @@ min_nr_plumes: 1
 
 
 # Tracking parameters
-main_lifetime_thresh: 6
+main_lifetime_thresh: 4
 main_area_thresh: 1000
 grid_cell_area_km2: 16
 nmaxmerge: 5
 
 # Other parameters
+detection: True
 plotting_enabled: False
 use_multiprocessing: False
 number_of_cores: 24
