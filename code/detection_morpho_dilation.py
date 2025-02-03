@@ -53,11 +53,16 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
     core_coords = np.column_stack((lat[core_mask].ravel(), lon[core_mask].ravel()))
 
     clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=min_cluster_size, metric="haversine", allow_single_cluster=True
+        min_cluster_size=min_cluster_size,
+        metric="haversine",
+        allow_single_cluster=False,
     )
     clusterer.fit(np.radians(core_coords))
-    # clusterer.labels_ = [-1, 0, 1, 2, ...]
-    core_labels = np.where(clusterer.labels_ == 0, -1, clusterer.labels_ + 1)
+    # clusterer.labels_ = [-1, 0, 1, 2, ...]  (0 is the first cluster, -1 is noise)
+    core_labels = np.where(
+        clusterer.labels_ >= 0, clusterer.labels_ + 1, clusterer.labels_
+    )
+    core_labels[core_labels == -1] = 0
 
     # Insert into 2D array
     labels_2d[core_mask] = core_labels
