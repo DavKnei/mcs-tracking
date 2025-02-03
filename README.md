@@ -6,12 +6,12 @@ The code processes precipitation data from NetCDF files, identifies MCS regions 
 ## Features
 
 - **Detection of MCS Regions**: Identifies moderate and heavy precipitation areas using configurable thresholds.
-- **Clustering**: Uses clustering based on HDBSCAN to group moderate precipitation grid points into potential MCS regions.
-- **Convective Plums**: Uses watershed segmentation to look for heavy precipitation regions in the clusters.
-- **Cluster Filter**: Filter the moderate precipitation clusters by size and number of convective plumns.
+- **Convective Cores**: Uses clustering based on HDBSCAN to find heavy precipitation cores above heavy_precip_threshold.
+- **MCS Canditate Clusters**: Use morphological dilation to expand the convective cores outward. If two cluster meet, they get merged immediately.
+- **Cluster Filter**: Filter the moderate precipitation clusters by size according to min_size_threshold for MCS candidates.
 - **Tracking Over Time**: Tracks MCS regions across multiple time steps based on spatial overlap.
 - **Merging and Splitting Events**: Handles complex scenarios where MCSs merge into a single larger system or split into multiple smaller systems.
-- **Parallel Processing**: Supports parallel processing for efficient computation.
+- **Parallel Processing**: Supports parallel processing for the detection step for efficient computation.
 - **Visualization**: Generates plots of detected MCS regions for each time step.
 
 ## Table of Contents
