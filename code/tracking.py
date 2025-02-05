@@ -407,19 +407,17 @@ def filter_relevant_systems(
     # Start with the main MCS IDs.
     relevant_ids = set(main_mcs_ids)
 
-    # Add IDs involved in merging events.
+    # Add IDs involved in merging events of MCSs.
     for event in merging_events:
-        # Add all parent IDs.
-        relevant_ids.update(event.parent_ids)
-        # Also add the child ID.
-        relevant_ids.add(event.child_id)
+        if event.child_id in relevant_ids:
+            relevant_ids.update(event.parent_ids)
+            relevant_ids.add(event.child_id)
 
-    # Add IDs involved in splitting events.
+    # Add IDs involved in splitting events of MCSs.
     for event in splitting_events:
-        # Add the parent ID.
-        relevant_ids.add(event.parent_id)
-        # Add all child IDs.
-        relevant_ids.update(event.child_ids)
+        if event.parent_id in relevant_ids:
+            relevant_ids.add(event.parent_id)
+            relevant_ids.update(event.child_ids)
 
     # Filter each timestep's array: only keep values in relevant_ids.
     filtered_mcs_ids_list = []
@@ -558,7 +556,7 @@ def track_mcs(
                 previous_labeled_regions,
                 final_labeled_regions,
                 previous_cluster_ids,
-                overlap_threshold=10,
+                overlap_threshold=5,
             )
             temp_assigned = {}
             labels_no_overlap = []
