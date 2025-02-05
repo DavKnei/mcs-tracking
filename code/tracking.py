@@ -556,7 +556,7 @@ def track_mcs(
                 previous_labeled_regions,
                 final_labeled_regions,
                 previous_cluster_ids,
-                overlap_threshold=5,
+                overlap_threshold=10,
             )
             temp_assigned = {}
             labels_no_overlap = []
