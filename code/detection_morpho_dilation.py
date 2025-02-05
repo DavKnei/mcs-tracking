@@ -70,7 +70,7 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
 
 
 def morphological_expansion_with_merging(
-    core_labels, precip, expand_threshold=0.1, max_iterations=80
+    core_labels, precip, expand_threshold=0.1, max_iterations=200
 ):
     """
     Performs iterative morphological expansion of labeled cores. In each iteration:
@@ -547,7 +547,7 @@ def detect_mcs_in_file(
         core_labels,
         precipitation_smooth,
         expand_threshold=moderate_precip_threshold,
-        max_iterations=80,
+        max_iterations=200,
     )
 
     expanded_labels = unify_checkerboard_simple(
