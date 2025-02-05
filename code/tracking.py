@@ -110,9 +110,9 @@ def check_overlaps(
     overlap_map = {}
 
     unique_prev_labels = np.unique(previous_labeled_regions)
-    unique_prev_labels = unique_prev_labels[unique_prev_labels != -1]
+    unique_prev_labels = unique_prev_labels[unique_prev_labels != 0]
     unique_curr_labels = np.unique(final_labeled_regions)
-    unique_curr_labels = unique_curr_labels[unique_curr_labels != -1]
+    unique_curr_labels = unique_curr_labels[unique_curr_labels != 0]
 
     for new_label in unique_curr_labels:
         curr_mask = final_labeled_regions == new_label
@@ -457,7 +457,7 @@ def track_mcs(
         mcs_lifetime = np.zeros_like(final_labeled_regions, dtype=np.int32)
 
         unique_labels = np.unique(final_labeled_regions)
-        unique_labels = unique_labels[unique_labels != -1]
+        unique_labels = unique_labels[unique_labels != 0]
 
         # If no valid clusters => end all tracks for this timestep
         if len(unique_labels) == 0:
