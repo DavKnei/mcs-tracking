@@ -4,8 +4,6 @@ import os
 import glob
 import concurrent.futures
 import argparse
-import numpy as np
-import xarray as xr
 import yaml
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
