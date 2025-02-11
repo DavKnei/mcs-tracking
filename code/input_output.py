@@ -43,6 +43,7 @@ def serialize_center_points(center_points):
         casted_dict[label_str] = (float(lat_val), float(lon_val))
     return json.dumps(casted_dict)
 
+
 def save_detection_results(detection_results, output_filepath):
     """Saves detection results (including per-timestep center_of_mass) to a NetCDF file.
 
@@ -77,7 +78,7 @@ def save_detection_results(detection_results, output_filepath):
         if lat is None:
             lat = detection_result["lat"]
             lon = detection_result["lon"]
-        
+
         # If 'center_points' is present, store it; else store empty
         if "center_points" in detection_result:
             center_points = detection_result["center_points"]

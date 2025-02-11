@@ -1,6 +1,7 @@
 import numpy as np
 from skimage.measure import regionprops
 
+
 def extract_shape_features(clusters, lat, lon, grid_spacing_km):
     """Extracts shape features (e.g., area, perimeter, axes) from labeled clusters.
 
@@ -86,6 +87,7 @@ def extract_shape_features(clusters, lat, lon, grid_spacing_km):
         }
 
     return shape_features
+
 
 def classify_mcs_types(shape_features):
     """
