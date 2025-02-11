@@ -8,9 +8,7 @@ from detection_helper_func import (
 )
 from detection_filter_func import (
     filter_mcs_candidates,
-    extract_shape_features,
     compute_cluster_centers_of_mass,
-    classify_mcs_types,
 )
 
 
