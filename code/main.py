@@ -1,10 +1,11 @@
-# main.py
-
 import os
 import glob
 import concurrent.futures
 import argparse
 import yaml
+import sys
+import logging
+
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
 from tracking_filter_func import filter_main_mcs
@@ -14,6 +15,9 @@ from input_output import (
     load_detection_results,
     save_tracking_results_to_netcdf,
 )
+from logging_setup import setup_logging, handle_exception
+
+sys.excepthook = handle_exception
 
 # Define a function for parallel processing
 def process_file(
@@ -46,6 +50,10 @@ def parse_arguments():
 
 
 def main():
+
+    # Get a logger for this module
+    logger = logging.getLogger(__name__)
+
     # Parse command-line arguments
     args = parse_arguments()
 
@@ -81,6 +89,9 @@ def main():
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
 
+    setup_logging(output_path)
+    logger.info("Loading Configuration finished.")
+
     # Ensure directories exist
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(output_plot_dir, exist_ok=True)
@@ -104,15 +115,15 @@ def main():
     if detection_results_exist and not DO_DETECTION:
         detection_results = load_detection_results(detection_results_file)
         if detection_results is not None:
-            print("Detection results loaded from file. Skipping detection step.")
+            logger.info("Detection results loaded from file. Skipping detection step.")
         else:
-            print("Detection results file is invalid. Running detection.")
+            logger.warning("Detection results file is invalid. Running detection.")
             detection_results_exist = False  # Set to False to run detection
     elif detection_results_exist and DO_DETECTION:
         detection_results_exist = False  # Set to False to run detection
-        print("Detection file does exist. detection=True: Running detection")
+        logger.info("Detection file does exist. detection=True: Running detection")
     else:
-        print("Detection results file does not exist. Running detection.")
+        logger.info("Detection results file does not exist. Running detection.")
 
     if not detection_results_exist:
         if USE_MULTIPROCESSING:
@@ -138,7 +149,7 @@ def main():
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
                     detection_results.append(detection_result)
-                    print(
+                    logger.info(
                         f"MCS detection completed for time {detection_result['time']}."
                     )
         else:
@@ -155,14 +166,14 @@ def main():
                 )
                 detection_results.append(detection_result)
 
-                print(f"MCS detection completed for {file_path}.")
+                logger.info(f"MCS detection completed for {file_path}.")
                 if SAVE_PLOTS:
                     save_intermediate_plots(detection_result, output_plot_dir)
 
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
 
-        print("Detection finished.")
+        logger.info("Detection finished.")
         # Save detection results to NetCDF file
         save_detection_results(detection_results, detection_results_file)
     else:
@@ -170,7 +181,7 @@ def main():
         pass
 
     # Perform tracking
-    print("Tracking of MCS...")
+    logger.info("Tracking of MCS...")
     (
         mcs_ids_list,
         main_mcs_ids,
@@ -188,7 +199,7 @@ def main():
         grid_cell_area_km2,
         nmaxmerge,
     )
-    print("Tracking of MCS finished.")
+    logger.info("Tracking of MCS finished.")
 
     main_mcs_ids_list = filter_main_mcs(mcs_ids_list, main_mcs_ids)
 
