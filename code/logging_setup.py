@@ -11,18 +11,12 @@ def setup_logging(path):
     fh = logging.FileHandler(os.path.join(path, "mcs_tracking.log"), mode="w")
     fh.setLevel(logging.DEBUG)
 
-    # Create a console handler with a higher log level (e.g., info)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-
     # Create formatter and add it to the handlers
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
 
     # Add the handlers to the logger
     logger.addHandler(fh)
-    logger.addHandler(ch)
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):

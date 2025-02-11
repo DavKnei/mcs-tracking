@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 from collections import defaultdict
 import hdbscan
 from scipy.signal import fftconvolve
@@ -94,7 +95,7 @@ def morphological_expansion_with_merging(
         - We re-check collisions repeatedly within each iteration to avoid partial merges
           (which can cause 'checkerboard' leftovers).
     """
-
+    logger = logging.getLogger(__name__)
     structure = generate_binary_structure(2, 1)  # 8-connected
     iteration = 0
 
@@ -120,7 +121,8 @@ def morphological_expansion_with_merging(
             changed_pixels_total += np.count_nonzero(new_pixels)
 
         if changed_pixels_total == 0:
-            print(f"Expansion converged after {iteration} iterations.")
+            if iteration > max_iterations:
+                logger.warning("Expansion stopped after max iteration: %d", iteration)
             break
 
         # 2) Merge collisions in a loop until stable
