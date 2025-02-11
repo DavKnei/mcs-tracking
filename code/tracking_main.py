@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 from collections import defaultdict
 from tracking_filter_func import filter_relevant_systems
 from tracking_helper_func import (
@@ -46,6 +47,8 @@ def track_mcs(
             tracking_centers_list (List[dict]): For each timestep, a dict mapping
                 track_id -> (center_lat, center_lon).
     """
+    logger = logging.getLogger(__name__)
+
     previous_labeled_regions = None
     previous_cluster_ids = {}
     merge_split_cluster_ids = {}
@@ -194,6 +197,7 @@ def track_mcs(
 
             current_cluster_ids = temp_assigned
             previous_cluster_ids = current_cluster_ids
+            logger.info(f"MCS tracking of {current_time}.")
 
         previous_labeled_regions = final_labeled_regions.copy()
 
@@ -252,7 +256,7 @@ def track_mcs(
     filtered_mcs_ids_list = filter_relevant_systems(
         mcs_ids_list, main_mcs_ids, merging_events, splitting_events
     )
-
+    logger.info(f"Tracking finished. {len(main_mcs_ids)} main MCSs found.")
     return (
         filtered_mcs_ids_list,
         main_mcs_ids,
