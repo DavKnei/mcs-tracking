@@ -149,9 +149,6 @@ def main():
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
                     detection_results.append(detection_result)
-                    logger.info(
-                        f"MCS detection completed for time {detection_result['time']}."
-                    )
         else:
             # Process files sequentially
             for file_path in file_list:
@@ -166,7 +163,6 @@ def main():
                 )
                 detection_results.append(detection_result)
 
-                logger.info(f"MCS detection completed for {file_path}.")
                 if SAVE_PLOTS:
                     save_intermediate_plots(detection_result, output_plot_dir)
 

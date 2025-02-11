@@ -8,7 +8,7 @@ def setup_logging(path):
     logger.setLevel(logging.DEBUG)
 
     # Create a file handler that logs debug and higher level messages.
-    fh = logging.FileHandler(os.path.join(path, "mcs_tracking.log"))
+    fh = logging.FileHandler(os.path.join(path, "mcs_tracking.log"), mode="w")
     fh.setLevel(logging.DEBUG)
 
     # Create a console handler with a higher log level (e.g., info)

@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 from input_output import load_data
 from detection_helper_func import (
     smooth_precipitation_field,
@@ -38,6 +39,8 @@ def detect_mcs_in_file(
     Returns:
     - detection_result: Dictionary containing detection results.
     """
+    logger = logging.getLogger(__name__)
+    
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, data_var, time_index)
 
@@ -100,4 +103,5 @@ def detect_mcs_in_file(
         "center_points": cluster_centers,
     }
 
+    logger.info(f"MCS detection completed for {file_path}.")
     return detection_result
