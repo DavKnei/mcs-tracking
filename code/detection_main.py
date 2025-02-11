@@ -85,18 +85,10 @@ def detect_mcs_in_file(
         np.isin(expanded_labels, mcs_candidate_labels), expanded_labels, 0
     )
 
-    # Step 7: Extract shape features from clusters
-    shape_features = extract_shape_features(
-        final_labeled_regions, lat, lon, grid_spacing_km
-    )
-
-    # Step 8: Compute cluster centers of mass
+    # Step 5: Compute cluster centers of mass
     cluster_centers = compute_cluster_centers_of_mass(
         final_labeled_regions, lat, lon, precipitation
     )
-
-    # Step 9: Classify MCS types
-    mcs_classification = classify_mcs_types(shape_features)
 
     # Prepare detection result
     detection_result = {
