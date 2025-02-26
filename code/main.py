@@ -19,6 +19,7 @@ from logging_setup import setup_logging, handle_exception
 
 sys.excepthook = handle_exception
 
+
 # Define a function for parallel processing
 def process_file(
     file_path,
@@ -210,6 +211,10 @@ def main():
         tracking_centers_list,
         tracking_output_dir,
     )
+
+    print("Tracking finished successfully.")
+    logger.info("Tracking finished successfully.")
+    logger.info("All processing completed.")
 
 
 if __name__ == "__main__":
