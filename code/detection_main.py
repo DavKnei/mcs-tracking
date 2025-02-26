@@ -61,7 +61,7 @@ def detect_mcs_in_file(
         core_labels,
         precipitation_smooth,
         expand_threshold=moderate_precip_threshold,
-        max_iterations=200,
+        max_iterations=400,
     )
 
     expanded_labels = unify_checkerboard_simple(

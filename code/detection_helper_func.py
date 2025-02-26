@@ -69,7 +69,7 @@ def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_
 
 
 def morphological_expansion_with_merging(
-    core_labels, precip, expand_threshold=0.1, max_iterations=200
+    core_labels, precip, expand_threshold=0.1, max_iterations=400
 ):
     """
     Performs iterative morphological expansion of labeled cores. In each iteration:
