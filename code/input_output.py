@@ -313,7 +313,8 @@ def save_tracking_results_to_netcdf(
             if str(tid) in full_centers_dict:
                 main_centers_dict[str(tid)] = full_centers_dict[str(tid)]
 
-        main_centers_json = json.dumps(main_centers_dict)
+        main_centers_dict_str = serialize_center_points(main_centers_dict)
+        main_centers_json = json.dumps(main_centers_dict_str)
         ds["main_mcs_id"].attrs[f"center_points_main_t{i}"] = main_centers_json
 
     # Save the NetCDF file
