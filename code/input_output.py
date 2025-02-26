@@ -285,9 +285,9 @@ def save_tracking_results_to_netcdf(
 
     # Set global attributes
     ds.attrs["title"] = "MCS Tracking Results"
-    ds.attrs[
-        "institution"
-    ] = "Wegener Center for Global and Climate Change / University of Graz"
+    ds.attrs["institution"] = (
+        "Wegener Center for Global and Climate Change / University of Graz"
+    )
     ds.attrs["source"] = "MCS Detection and Tracking Algorithm"
     ds.attrs["history"] = f"Created on {datetime.datetime.now()}"
     ds.attrs["references"] = "David Kneidinger <david.kneidinger@uni-graz.at>"
@@ -310,13 +310,14 @@ def save_tracking_results_to_netcdf(
 
         main_centers_dict = {}
         for tid in used_main_ids:
-            if tid in full_centers_dict:
-                main_centers_dict[tid] = full_centers_dict[tid]
+            if str(tid) in full_centers_dict:
+                main_centers_dict[str(tid)] = full_centers_dict[str(tid)]
 
         main_centers_json = json.dumps(main_centers_dict)
         ds["main_mcs_id"].attrs[f"center_points_main_t{i}"] = main_centers_json
 
     # Save the NetCDF file
     output_filepath = os.path.join(output_dir, "mcs_tracking_results.nc")
+    breakpoint()
     ds.to_netcdf(output_filepath)
     print(f"Saved tracking results to {output_filepath}")
