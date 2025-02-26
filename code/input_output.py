@@ -223,7 +223,7 @@ def save_tracking_results_to_netcdf(
     In addition, it stores the track centers for each timestep in two sets of
     JSON attributes:
       1. center_points_t{i}   => The full center dictionary for all track IDs
-      2. center_points_main_t{i} => A filtered center dictionary only for the main MCS IDs
+      2. center_points_t{i} => A filtered center dictionary only for the main MCS IDs
 
     Args:
         mcs_id_list (List[numpy.ndarray]):
@@ -294,7 +294,7 @@ def save_tracking_results_to_netcdf(
 
     # Store center points in JSON attributes for each timestep
     # 1) Full track center points: center_points_t{i}
-    # 2) Main track center points: center_points_main_t{i}, filtered by main_mcs_id
+    # 2) Main track center points: center_points_t{i}, filtered by main_mcs_id
     num_timesteps = len(time_list)
     for i in range(num_timesteps):
         full_centers_dict = tracking_centers_list[i]  # track_id -> (lat, lon)
@@ -315,7 +315,7 @@ def save_tracking_results_to_netcdf(
 
         main_centers_dict_str = serialize_center_points(main_centers_dict)
         main_centers_json = json.dumps(main_centers_dict_str)
-        ds["main_mcs_id"].attrs[f"center_points_main_t{i}"] = main_centers_json
+        ds["main_mcs_id"].attrs[f"center_points_t{i}"] = main_centers_json
 
     # Save the NetCDF file
     output_filepath = os.path.join(output_dir, "mcs_tracking_results.nc")
