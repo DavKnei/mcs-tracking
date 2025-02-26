@@ -115,7 +115,7 @@ def morphological_expansion_with_merging(
 
             if np.any(new_pixels):
                 coords = zip(*new_pixels.nonzero())
-                for (r, c) in coords:
+                for r, c in coords:
                     expansions[lbl].add((r, c))
 
             changed_pixels_total += np.count_nonzero(new_pixels)
@@ -133,7 +133,7 @@ def morphological_expansion_with_merging(
             # 2a) Build a mapping from pixel -> list of labels claiming it
             pixel_claims = defaultdict(list)
             for lbl, pixset in expansions.items():
-                for (r, c) in pixset:
+                for r, c in pixset:
                     pixel_claims[(r, c)].append(lbl)
 
             # 2b) Detect collisions
@@ -169,7 +169,7 @@ def morphological_expansion_with_merging(
         # 3) Finally, apply expansions to core_labels
         #    Now that merges are stable for this iteration
         for lbl, pixset in expansions.items():
-            for (r, c) in pixset:
+            for r, c in pixset:
                 core_labels[r, c] = lbl
 
     return core_labels

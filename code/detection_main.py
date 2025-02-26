@@ -40,7 +40,7 @@ def detect_mcs_in_file(
     - detection_result: Dictionary containing detection results.
     """
     logger = logging.getLogger(__name__)
-    
+
     # Load data
     ds, lat, lon, precipitation = load_data(file_path, data_var, time_index)
 
