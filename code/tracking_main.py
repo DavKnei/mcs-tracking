@@ -86,7 +86,7 @@ def track_mcs(
 
         # If no valid clusters are detected, end all tracks for this timestep.
         if len(unique_labels) == 0:
-            print(f"No clusters detected at {current_time}")
+            logger.info(f"No clusters detected at {current_time}")
             previous_cluster_ids = {}
             previous_labeled_regions = None
 
