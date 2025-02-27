@@ -257,6 +257,7 @@ def track_mcs(
         mcs_ids_list, main_mcs_ids, merging_events, splitting_events
     )
     logger.info(f"Tracking finished. {len(main_mcs_ids)} main MCSs found.")
+
     return (
         filtered_mcs_ids_list,
         main_mcs_ids,

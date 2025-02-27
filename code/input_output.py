@@ -27,7 +27,7 @@ def load_data(file_path, data_var, time_index=0):
 
     # Make lat and lon 2d
     if latitude.ndim == 1 and longitude.ndim == 1:
-        lat, lon = np.meshgrid(longitude, latitude)
+        lat, lon = np.meshgrid(latitude, longitude)
     else:
         lat, lon = latitude, longitude
 
