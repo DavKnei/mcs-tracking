@@ -1,12 +1,12 @@
 import numpy as np
 import logging
 from collections import defaultdict
-import hdbscan
 from scipy.signal import fftconvolve
 from scipy.ndimage import (
     binary_dilation,
     generate_binary_structure,
 )
+from skimage.measure import label as connected_label
 
 
 def smooth_precipitation_field(precipitation, kernel_size=2):
@@ -25,47 +25,55 @@ def smooth_precipitation_field(precipitation, kernel_size=2):
     return fftconvolve(precipitation, kernel, mode="same")
 
 
-def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3):
-    """
-    Cluster heavy precipitation cores using HDBSCAN.
+def detect_cores_connected(
+    precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3
+):
+    """Cluster heavy precipitation cores using connected component labeling.
 
-    Parameters:
-    - precipitation: 2D precipitation field.
-    - lat: 2D array of latitude values corresponding to the precipitation grid.
-    - lon: 2D array of longitude values corresponding to the precipitation grid.
-    - core_thresh: Threshold for heavy precipitation cores.
-    - min_cluster_size: Minimum number of samples in a cluster for HDBSCAN.
+    This function thresholds the precipitation field at the specified core threshold
+    and then identifies contiguous clusters using connected component analysis.
+    Any connected component with fewer than `min_cluster_size` pixels is discarded.
+
+    Args:
+        precipitation (numpy.ndarray): 2D array representing the precipitation field.
+        lat (numpy.ndarray): 2D array of latitude values corresponding to the precipitation grid.
+        lon (numpy.ndarray): 2D array of longitude values corresponding to the precipitation grid.
+        core_thresh (float, optional): Threshold for heavy precipitation cores (e.g., mm/h).
+            Defaults to 10.0.
+        min_cluster_size (int, optional): Minimum number of pixels required for a cluster to be kept.
+            Clusters with fewer pixels than this threshold are discarded. Defaults to 3.
 
     Returns:
-    - labeled_array: 2D array with cluster labels for each grid point.
-      Points not belonging to any cluster are labeled as -1.
+        numpy.ndarray: 2D array of integer cluster labels for each grid point.
+            Pixels not belonging to any cluster are labeled as 0. Detected clusters are assigned
+            consecutive positive integers starting at 1.
     """
-    """
-    Example, same as above but we pass lat2d, lon2d as arguments.
-    """
+    # Create a binary mask where precipitation meets or exceeds the core threshold.
     core_mask = precipitation >= core_thresh
-    labels_2d = np.zeros_like(precipitation, dtype=int)
+
+    # If there are fewer pixels above threshold than the minimum cluster size, return an array of zeros.
     if np.sum(core_mask) < min_cluster_size:
-        return labels_2d
+        return np.zeros_like(precipitation, dtype=int)
 
-    # Extract lat/lon for the masked pixels
-    core_coords = np.column_stack((lat[core_mask].ravel(), lon[core_mask].ravel()))
+    # Label connected components in the binary mask.
+    # Use connectivity=2 for 8-connected neighborhood.
+    labeled_components = connected_label(core_mask, connectivity=2)
 
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=min_cluster_size,
-        metric="haversine",
-        allow_single_cluster=False,
-    )
-    clusterer.fit(np.radians(core_coords))
-    # clusterer.labels_ = [-1, 0, 1, 2, ...]  (0 is the first cluster, -1 is noise)
-    core_labels = np.where(
-        clusterer.labels_ >= 0, clusterer.labels_ + 1, clusterer.labels_
-    )
-    core_labels[core_labels == -1] = 0
+    # Initialize final label array.
+    final_labels = np.zeros_like(labeled_components, dtype=int)
+    unique_labels = np.unique(labeled_components)
+    # Exclude the background label (0)
+    unique_labels = unique_labels[unique_labels != 0]
 
-    # Insert into 2D array
-    labels_2d[core_mask] = core_labels
-    return labels_2d
+    # Reassign labels only for connected components that meet the min_cluster_size.
+    current_label = 1
+    for label_val in unique_labels:
+        comp_mask = labeled_components == label_val
+        if np.sum(comp_mask) >= min_cluster_size:
+            final_labels[comp_mask] = current_label
+            current_label += 1
+        # Components smaller than min_cluster_size are discarded (remain 0).
+    return final_labels
 
 
 def morphological_expansion_with_merging(
