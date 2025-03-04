@@ -6,7 +6,7 @@ The code processes precipitation data from NetCDF files, identifies MCS regions 
 ## Features
 
 - **Detection of MCS Regions**: Identifies moderate and heavy precipitation areas using configurable thresholds.
-- **Convective Cores**: Uses clustering based on HDBSCAN to find heavy precipitation cores above heavy_precip_threshold.
+- **Convective Cores**: Uses clustering based onconnected components to find heavy precipitation cores above heavy_precip_threshold.
 - **MCS Canditate Clusters**: Use morphological dilation to expand the convective cores outward. If two cluster meet, they get merged immediately.
 - **Cluster Filter**: Filter the moderate precipitation clusters by size according to min_size_threshold for MCS candidates.
 - **Tracking Over Time**: Tracks MCS regions across multiple time steps based on spatial overlap.
@@ -52,7 +52,7 @@ The code processes precipitation data from NetCDF files, identifies MCS regions 
 ## Code Structure
 
 - `main.py`: Main script that orchestrates the detection and tracking workflow.
-- `detection.py`: Contains functions for data loading, preprocessing, and MCS detection using HDBSCAN for clustering.
+- `detection.py`: Contains functions for data loading, preprocessing, and MCS detection.
 - `tracking.py`: Implements the tracking of MCS regions across time steps.
 - `plot.py`: Includes functions for visualizing precipitation data and detected MCS regions.
 - `tests/`: Directory containing test cases (Test1 through Test6) and pytest scripts.

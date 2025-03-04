@@ -1,6 +1,6 @@
 import numpy as np
 from skimage.measure import regionprops
-
+import hdbscan
 
 def extract_shape_features(clusters, lat, lon, grid_spacing_km):
     """Extracts shape features (e.g., area, perimeter, axes) from labeled clusters.
@@ -122,3 +122,46 @@ def classify_mcs_types(shape_features):
         mcs_classification[label_value] = mcs_type
 
     return mcs_classification
+
+
+def detect_cores_hdbscan(precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3):
+    """
+    Cluster heavy precipitation cores using HDBSCAN.
+
+    Parameters:
+    - precipitation: 2D precipitation field.
+    - lat: 2D array of latitude values corresponding to the precipitation grid.
+    - lon: 2D array of longitude values corresponding to the precipitation grid.
+    - core_thresh: Threshold for heavy precipitation cores.
+    - min_cluster_size: Minimum number of samples in a cluster for HDBSCAN.
+
+    Returns:
+    - labeled_array: 2D array with cluster labels for each grid point.
+      Points not belonging to any cluster are labeled as -1.
+    """
+    """
+    Example, same as above but we pass lat2d, lon2d as arguments.
+    """
+    core_mask = precipitation >= core_thresh
+    labels_2d = np.zeros_like(precipitation, dtype=int)
+    if np.sum(core_mask) < min_cluster_size:
+        return labels_2d
+
+    # Extract lat/lon for the masked pixels
+    core_coords = np.column_stack((lat[core_mask].ravel(), lon[core_mask].ravel()))
+
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=min_cluster_size,
+        metric="haversine",
+        allow_single_cluster=False,
+    )
+    clusterer.fit(np.radians(core_coords))
+    # clusterer.labels_ = [-1, 0, 1, 2, ...]  (0 is the first cluster, -1 is noise)
+    core_labels = np.where(
+        clusterer.labels_ >= 0, clusterer.labels_ + 1, clusterer.labels_
+    )
+    core_labels[core_labels == -1] = 0
+
+    # Insert into 2D array
+    labels_2d[core_mask] = core_labels
+    return labels_2d
