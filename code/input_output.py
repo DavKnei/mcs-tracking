@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+import pandas as pd
 import os
 import datetime
 import json
@@ -72,7 +73,10 @@ def save_detection_results(detection_results, output_filepath):
 
     for detection_result in detection_results:
         # Extract the required info
-        times.append(detection_result["time"])
+        times.append(
+            pd.to_datetime(detection_result["time"]).round("S")
+        )  # Round the time values to the nearest second
+
         final_labeled_regions_list.append(detection_result["final_labeled_regions"])
 
         if lat is None:
@@ -250,6 +254,9 @@ def save_tracking_results_to_netcdf(
     """
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
+
+    # Round timelist to seconds
+    time_list = pd.to_datetime(time_list).round("S")
 
     # Stack arrays along the time dimension
     mcs_id = np.stack(mcs_id_list, axis=0)  # (time, y, x)

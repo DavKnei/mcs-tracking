@@ -3,7 +3,7 @@ import logging
 from input_output import load_data
 from detection_helper_func import (
     smooth_precipitation_field,
-    detect_cores_hdbscan,
+    detect_cores_connected,
     morphological_expansion_with_merging,
     unify_checkerboard_simple,
 )
@@ -24,7 +24,7 @@ def detect_mcs_in_file(
     time_index=0,
 ):
     """
-    Detect MCSs in a single file using HDBSCAN for clustering.
+    Detect MCSs in a single file.
 
     Parameters:
     - file_path: Path to the NetCDF file containing precipitation data.
@@ -47,8 +47,8 @@ def detect_mcs_in_file(
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, kernel_size=2)
 
-    # Step 2: Detect heavy precipitation cores with HDBSCAN
-    core_labels = detect_cores_hdbscan(
+    # Step 2: Detect heavy precipitation cores with connected component labeling
+    core_labels = detect_cores_connected(
         precipitation,
         lat,
         lon,
