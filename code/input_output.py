@@ -45,7 +45,7 @@ def serialize_center_points(center_points):
     return json.dumps(casted_dict)
 
 
-def save_detection_results(detection_results, output_filepath):
+def save_detection_results(detection_results, output_filepath, data_source):
     """Saves detection results (including per-timestep center_of_mass) to a NetCDF file.
 
     This function gathers:
@@ -64,6 +64,8 @@ def save_detection_results(detection_results, output_filepath):
                 optionally "center_points": { label_value : (lat, lon) }.
         output_filepath (str):
             Path to the output NetCDF file.
+        data_source (str):
+            Name of the original precipitation data source for attrs of output .nc file (e.g. INCA).
     """
     times = []
     final_labeled_regions_list = []
@@ -107,6 +109,7 @@ def save_detection_results(detection_results, output_filepath):
         },
         attrs={
             "description": "Detection results of MCSs",
+            "source": data_source,
             "note": "This file contains the final labeled regions from MCS detection.",
         },
     )
@@ -215,6 +218,7 @@ def save_tracking_results_to_netcdf(
     lon,
     tracking_centers_list,
     output_dir,
+    data_source,
 ):
     """
     Save tracking results (including center points) to a NetCDF file.
@@ -248,6 +252,9 @@ def save_tracking_results_to_netcdf(
             This is the full set of track centers for merges/splits.
         output_dir (str):
             Directory in which to save the NetCDF file.
+        data_source (str):
+            Name of the original precipitation data source for attrs of output .nc file (e.g. INCA).
+
 
     Returns:
         None. Writes a file named "mcs_tracking_results.nc" in the output_dir.
@@ -295,7 +302,7 @@ def save_tracking_results_to_netcdf(
     ds.attrs[
         "institution"
     ] = "Wegener Center for Global and Climate Change / University of Graz"
-    ds.attrs["source"] = "MCS Detection and Tracking Algorithm"
+    ds.attrs["source"] = data_source
     ds.attrs["history"] = f"Created on {datetime.datetime.now()}"
     ds.attrs["references"] = "David Kneidinger <david.kneidinger@uni-graz.at>"
 

@@ -71,6 +71,7 @@ def main():
     tracking_output_dir = config["tracking_output_dir"]
     grid_spacing_km = config["grid_size_km"]
     data_var = config["var_name"]
+    data_source = config["data_source"]
 
     # Detection parameters
     min_size_threshold = config.get("min_size_threshold", 10)
@@ -171,7 +172,7 @@ def main():
         detection_results.sort(key=lambda x: x["time"])
         logger.info("Detection finished.")
         # Save detection results to NetCDF file
-        save_detection_results(detection_results, detection_results_file)
+        save_detection_results(detection_results, detection_results_file, data_source)
     else:
         # Detection results were loaded from file
         pass
@@ -209,6 +210,7 @@ def main():
         lon,
         tracking_centers_list,
         tracking_output_dir,
+        data_source,
     )
 
     print("Tracking finished successfully.")
