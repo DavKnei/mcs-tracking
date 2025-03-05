@@ -5,7 +5,6 @@
 data_directory: "../tests/Test7/data/"
 file_suffix: ".nc_test"
 output_path: "../tests/Test7/"
-output_plot_dir: "../tests/Test7/figures/"
 tracking_output_dir: "../tests/Test7/"
 grid_size_km: 11.0
 var_name: 'pr'
@@ -25,7 +24,6 @@ grid_cell_area_km2: 1
 nmaxmerge: 5
 
 # Other parameters
-detection: False
-plotting_enabled: False
+detection: True
 use_multiprocessing: True
 number_of_cores: 4

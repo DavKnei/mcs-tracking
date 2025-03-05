@@ -9,7 +9,6 @@ import logging
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
 from tracking_filter_func import filter_main_mcs
-from plot import save_intermediate_plots
 from input_output import (
     save_detection_results,
     load_detection_results,
@@ -67,7 +66,6 @@ def main():
     data_directory = config["data_directory"]
     file_suffix = config["file_suffix"]
     output_path = config["output_path"]
-    output_plot_dir = config["output_plot_dir"]
     tracking_output_dir = config["tracking_output_dir"]
     grid_spacing_km = config["grid_size_km"]
     data_var = config["var_name"]
@@ -86,7 +84,6 @@ def main():
     nmaxmerge = config.get("nmaxmerge", 5)
 
     # Other parameters
-    SAVE_PLOTS = config.get("plotting_enabled", True)
     USE_MULTIPROCESSING = config.get("use_multiprocessing", True)
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
@@ -96,7 +93,6 @@ def main():
 
     # Ensure directories exist
     os.makedirs(output_path, exist_ok=True)
-    os.makedirs(output_plot_dir, exist_ok=True)
     os.makedirs(tracking_output_dir, exist_ok=True)
 
     detection_results_file = os.path.join(output_path, "detection_results.nc")
@@ -164,9 +160,6 @@ def main():
                     grid_spacing_km,
                 )
                 detection_results.append(detection_result)
-
-                if SAVE_PLOTS:
-                    save_intermediate_plots(detection_result, output_plot_dir)
 
         # Sort detection results by time to ensure correct sequence
         detection_results.sort(key=lambda x: x["time"])
