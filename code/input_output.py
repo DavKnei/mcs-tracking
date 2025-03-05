@@ -188,7 +188,13 @@ def load_detection_results(input_filepath):
         if center_key in ds["final_labeled_regions"].attrs:
             center_points_json = ds["final_labeled_regions"].attrs[center_key]
             try:
-                center_points_dict = json.loads(center_points_json)
+                # First decoding attempt
+                center_points_intermediate = json.loads(center_points_json)
+                # If the result is still a string, decode it again
+                if isinstance(center_points_intermediate, str):
+                    center_points_dict = json.loads(center_points_intermediate)
+                else:
+                    center_points_dict = center_points_intermediate
             except json.JSONDecodeError:
                 center_points_dict = {}
         else:
