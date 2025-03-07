@@ -94,6 +94,8 @@ def main():
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
 
+    if not os.path.isdir(output_path):
+        os.makedirs(output_path)
     setup_logging(output_path)
     logger.info("Loading Configuration finished.")
 
