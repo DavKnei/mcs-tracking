@@ -16,6 +16,8 @@ from detection_filter_func import (
 def detect_mcs_in_file(
     file_path,
     data_var,
+    lat_name,
+    lon_name,
     heavy_precip_threshold,
     moderate_precip_threshold,
     min_size_threshold,
@@ -42,7 +44,9 @@ def detect_mcs_in_file(
     logger = logging.getLogger(__name__)
 
     # Load data
-    ds, lat, lon, precipitation = load_data(file_path, data_var, time_index)
+    ds, lat, lon, precipitation = load_data(
+        file_path, data_var, lat_name, lon_name, time_index
+    )
 
     # Step 1: Smooth the precipitation field
     precipitation_smooth = smooth_precipitation_field(precipitation, kernel_size=2)

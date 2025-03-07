@@ -6,7 +6,7 @@ import datetime
 import json
 
 
-def load_data(file_path, data_var, time_index=0):
+def load_data(file_path, data_var, lat_name, lon_name, time_index=0):
     """
     Load the dataset and select the specified time step.
 
@@ -23,8 +23,8 @@ def load_data(file_path, data_var, time_index=0):
     ds = xr.open_dataset(file_path)
     ds = ds.isel(time=time_index)  # Select the specified time step
     ds["time"] = ds["time"].values.astype("datetime64[ns]")
-    latitude = ds["lat"].values
-    longitude = ds["lon"].values
+    latitude = ds[lat_name].values
+    longitude = ds[lon_name].values
 
     # Make lat and lon 2d
     if latitude.ndim == 1 and longitude.ndim == 1:

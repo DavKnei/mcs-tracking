@@ -23,6 +23,8 @@ sys.excepthook = handle_exception
 def process_file(
     file_path,
     data_var,
+    lat_name,
+    lon_name,
     heavy_precip_threshold,
     moderate_precip_threshold,
     min_size_threshold,
@@ -32,6 +34,8 @@ def process_file(
     result = detect_mcs_in_file(
         file_path,
         data_var,
+        lat_name,
+        lon_name,
         heavy_precip_threshold,
         moderate_precip_threshold,
         min_size_threshold,
@@ -69,6 +73,8 @@ def main():
     tracking_output_dir = config["tracking_output_dir"]
     grid_spacing_km = config["grid_size_km"]
     data_var = config["var_name"]
+    lat_name = config["lat_name"]
+    lon_name = config["lon_name"]
     data_source = config["data_source"]
 
     # Detection parameters
@@ -136,6 +142,8 @@ def main():
                         process_file,
                         file_path,
                         data_var,
+                        lat_name,
+                        lon_name,
                         heavy_precip_threshold,
                         moderate_precip_threshold,
                         min_size_threshold,
@@ -153,6 +161,8 @@ def main():
                 detection_result = detect_mcs_in_file(
                     file_path,
                     data_var,
+                    lat_name,
+                    lon_name,
                     heavy_precip_threshold,
                     moderate_precip_threshold,
                     min_size_threshold,

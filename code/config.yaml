@@ -7,8 +7,10 @@ file_suffix: ".nc_test"
 output_path: "../tests/Test7/"
 tracking_output_dir: "../tests/Test7/"
 grid_size_km: 11.0
-var_name: 'pr'
-data_source: 'Test data'
+var_name: "pr"
+lat_name: "lat"
+lon_name: "lon"
+data_source: "Test data"
 
 # Detection parametersS
 min_size_threshold: 10
