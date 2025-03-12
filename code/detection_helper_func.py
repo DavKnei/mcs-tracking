@@ -182,6 +182,119 @@ def morphological_expansion_with_merging(
 
     return core_labels
 
+def cascading_threshold_expansion(region_mask, precipitation, low_pct=0.11, high_pct=0.33, base_thresh=1.0, max_iterations=400):
+    """
+    Apply cascading threshold expansion on a contiguous precipitation region.
+
+    This function refines convective core identification within a region by:
+      1. Computing the maximum precipitation within the region.
+      2. Defining a high threshold as (high_pct * max_precip) and a low threshold as (low_pct * max_precip).
+      3. Labeling initial convective cores (seeds) as pixels above the high threshold.
+      4. Iteratively expanding these seed labels by adding neighboring pixels that meet the low threshold,
+         while ensuring only valid (region and >= base_thresh) pixels are added.
+      5. Merging overlapping expansions so that if a pixel is claimed by multiple cores, the smallest label wins.
+
+    Parameters:
+        region_mask (numpy.ndarray): Boolean 2D array indicating the contiguous precipitation region.
+        precipitation (numpy.ndarray): 2D array of precipitation values (same shape as region_mask).
+        low_pct (float): Fraction (default 0.11) of max precipitation used as low threshold.
+        high_pct (float): Fraction (default 0.33) of max precipitation used as high threshold.
+        base_thresh (float): Base precipitation threshold (default 1.0 mm/h) to define the region.
+        max_iterations (int): Maximum number of expansion iterations.
+
+    Returns:
+        numpy.ndarray: 2D integer array of refined labels for convective cores within the region.
+                       Pixels outside region_mask remain 0.
+    """
+    import numpy as np
+    from scipy.ndimage import binary_dilation, generate_binary_structure
+    from skimage.measure import label as connected_label
+    from collections import defaultdict
+
+    # Initialize refined_labels as zeros; only process pixels within region_mask
+    refined_labels = np.zeros_like(precipitation, dtype=int)
+    
+    # Define the valid region: within the region_mask and above the base threshold.
+    valid_region = region_mask & (precipitation >= base_thresh)
+    if not np.any(valid_region):
+        return refined_labels  # No valid pixels
+
+    # Compute maximum precipitation within the valid region.
+    p_max = np.max(precipitation[valid_region])
+    
+    # Define dynamic thresholds.
+    T_high = high_pct * p_max
+    T_low = low_pct * p_max
+
+    # Create initial seeds: pixels within valid_region that are above the high threshold.
+    seed_mask = valid_region & (precipitation >= T_high)
+    seed_labels = connected_label(seed_mask, connectivity=2)
+    if np.max(seed_labels) == 0:
+        return refined_labels  # No convective seeds detected
+
+    refined_labels = seed_labels.copy()
+    
+    # Set up parameters for morphological expansion.
+    structure = generate_binary_structure(2, 1)  # 8-connected structure
+    iteration = 0
+
+    while iteration < max_iterations:
+        iteration += 1
+        changed_pixels_total = 0
+
+        # Dictionary to store potential new pixels for each label.
+        expansions = {lbl: set() for lbl in np.unique(refined_labels) if lbl > 0}
+
+        # For each label, dilate and check neighboring pixels.
+        for lbl in expansions:
+            feature_mask = refined_labels == lbl
+            dilated_mask = binary_dilation(feature_mask, structure=structure)
+            # New candidate pixels: those not already in the feature and within valid_region.
+            new_pixels = dilated_mask & (~feature_mask) & valid_region
+            # Only add if precipitation is above the low threshold.
+            candidate_pixels = new_pixels & (precipitation >= T_low)
+            coords = np.argwhere(candidate_pixels)
+            if coords.size > 0:
+                for r, c in coords:
+                    expansions[lbl].add((r, c))
+                changed_pixels_total += len(coords)
+        
+        # Stop if no new pixels are added.
+        if changed_pixels_total == 0:
+            break
+
+        # Merge collisions: build mapping of pixel -> list of labels claiming it.
+        pixel_claims = defaultdict(list)
+        for lbl, pixset in expansions.items():
+            for coord in pixset:
+                pixel_claims[tuple(coord)].append(lbl)
+        
+        # Identify collisions: pixels claimed by more than one label.
+        merges = []
+        for coord, labels_list in pixel_claims.items():
+            if len(labels_list) > 1:
+                merges.append(set(labels_list))
+        
+        # Unify overlapping merge sets.
+        merged_sets = _unify_merge_sets(merges)
+        # Apply merges: for each merge set, reassign all labels to the smallest label.
+        for merge_set in merged_sets:
+            if len(merge_set) > 1:
+                master = min(merge_set)
+                for other in merge_set:
+                    if other != master:
+                        refined_labels[refined_labels == other] = master
+                        if other in expansions:
+                            expansions[master].update(expansions[other])
+                            del expansions[other]
+
+        # Apply expansions: update refined_labels with new pixels.
+        for lbl, pixset in expansions.items():
+            for r, c in pixset:
+                refined_labels[r, c] = lbl
+
+    return refined_labels
+
 
 def unify_merge_sets(merges):
     """
