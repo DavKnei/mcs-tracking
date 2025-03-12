@@ -8,7 +8,6 @@ from scipy.ndimage import (
 )
 from skimage.measure import label as connected_label
 
-
 def smooth_precipitation_field(precipitation, kernel_size=2):
     """
     Apply simple box filter using FFT convolution with a kernel_size x kernel_size box to the precipitation field.
@@ -182,7 +181,7 @@ def morphological_expansion_with_merging(
 
     return core_labels
 
-def cascading_threshold_expansion(region_mask, precipitation, low_pct=0.11, high_pct=0.33, base_thresh=1.0, max_iterations=400):
+def cascading_threshold_expansion(region_mask, precipitation, low_pct=0.11, high_pct=0.33, base_thresh=1.0, heavy_precip_threshold=10, max_iterations=400):
     """
     Apply cascading threshold expansion on a contiguous precipitation region.
 
@@ -206,10 +205,6 @@ def cascading_threshold_expansion(region_mask, precipitation, low_pct=0.11, high
         numpy.ndarray: 2D integer array of refined labels for convective cores within the region.
                        Pixels outside region_mask remain 0.
     """
-    import numpy as np
-    from scipy.ndimage import binary_dilation, generate_binary_structure
-    from skimage.measure import label as connected_label
-    from collections import defaultdict
 
     # Initialize refined_labels as zeros; only process pixels within region_mask
     refined_labels = np.zeros_like(precipitation, dtype=int)
@@ -222,6 +217,9 @@ def cascading_threshold_expansion(region_mask, precipitation, low_pct=0.11, high
     # Compute maximum precipitation within the valid region.
     p_max = np.max(precipitation[valid_region])
     
+    if p_max < heavy_precip_threshold:
+        return refined_labels
+        
     # Define dynamic thresholds.
     T_high = high_pct * p_max
     T_low = low_pct * p_max
@@ -276,7 +274,7 @@ def cascading_threshold_expansion(region_mask, precipitation, low_pct=0.11, high
                 merges.append(set(labels_list))
         
         # Unify overlapping merge sets.
-        merged_sets = _unify_merge_sets(merges)
+        merged_sets = unify_merge_sets(merges)
         # Apply merges: for each merge set, reassign all labels to the smallest label.
         for merge_set in merged_sets:
             if len(merge_set) > 1:

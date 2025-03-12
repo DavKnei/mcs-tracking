@@ -2,7 +2,7 @@ import numpy as np
 
 
 def filter_mcs_candidates(
-    clusters, convective_plumes, min_area_km2, min_nr_plumes, grid_cell_area_km2
+    clusters, min_area_km2, min_nr_plumes, grid_cell_area_km2
 ):
     """
     Filter clusters to identify MCS candidates based on area and number of convective plumes.
@@ -24,10 +24,10 @@ def filter_mcs_candidates(
     for label_value in cluster_labels:
         cluster_mask = clusters == label_value
         area_km2 = np.sum(cluster_mask) * grid_cell_area_km2
-        plumes_in_cluster = np.unique(convective_plumes[cluster_mask])
-        num_plumes = len(plumes_in_cluster[plumes_in_cluster != 0])
+        #plumes_in_cluster = np.unique(convective_plumes[cluster_mask])
+        #num_plumes = len(plumes_in_cluster[plumes_in_cluster != 0])
 
-        if area_km2 >= min_area_km2 and num_plumes >= min_nr_plumes:
+        if area_km2 >= min_area_km2: #and num_plumes >= min_nr_plumes:
             mcs_candidate_labels.append(label_value)
 
     return mcs_candidate_labels
