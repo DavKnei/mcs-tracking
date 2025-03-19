@@ -2,15 +2,18 @@
 
 
 # Data
-data_directory: "../tests/Test7/data/"
-file_suffix: ".nc_test"
-output_path: "../tests/Test7/"
-tracking_output_dir: "../tests/Test7/"
+precip_data_directory: "/data/reloclim/backup/MCS_database/raw_data/mcstracking/2017/08/"
+lifting_index_data_directory: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/data/ERA5/hourly/201708/"
+file_suffix: ".nc"
+output_path: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/"
+tracking_output_dir: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/"
+
 grid_size_km: 11.0
-var_name: "pr"
+precip_var_name: "pr"
+liting_index_var_name: "LI"
 lat_name: "lat"
 lon_name: "lon"
-data_source: "Test data"
+data_source: "IMERG precipitation and ERA5 Lifting Index"
 
 # Detection parametersS
 min_size_threshold: 10
@@ -26,6 +29,7 @@ grid_cell_area_km2: 1
 nmaxmerge: 5
 
 # Other parameters
+use_lifting_index: True
 detection: True
 use_multiprocessing: True
 number_of_cores: 4

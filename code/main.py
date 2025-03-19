@@ -67,12 +67,12 @@ def main():
         config = yaml.safe_load(f)
 
     # Access parameters from config
-    data_directory = config["data_directory"]
+    precip_data_dir = config["precip_data_directory"]
     file_suffix = config["file_suffix"]
     output_path = config["output_path"]
     tracking_output_dir = config["tracking_output_dir"]
     grid_spacing_km = config["grid_size_km"]
-    data_var = config["var_name"]
+    precip_data_var = config["precip_var_name"]
     lat_name = config["lat_name"]
     lon_name = config["lon_name"]
     data_source = config["data_source"]
@@ -90,9 +90,16 @@ def main():
     nmaxmerge = config.get("nmaxmerge", 5)
 
     # Other parameters
+    USE_LIFTING_INDEX = config.get("use_lifting_index", True)
+
+    if USE_LIFTING_INDEX:
+        lifting_index_data_dir = config["lifting_index_data_directory"]
+        lifting_index_data_var = config["liting_index_var_name"]
+    
     USE_MULTIPROCESSING = config.get("use_multiprocessing", True)
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
+
 
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
@@ -106,7 +113,7 @@ def main():
     detection_results_file = os.path.join(output_path, "detection_results.nc")
 
     # List all NetCDF files in the directory
-    file_list = sorted(glob.glob(os.path.join(data_directory, f"*{file_suffix}")))
+    file_list = sorted(glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}")))
     if not file_list:
         raise FileNotFoundError(
             "File directory is empty or no files found matching the specified suffix. Exiting..."
