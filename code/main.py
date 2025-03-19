@@ -90,12 +90,6 @@ def main():
     nmaxmerge = config.get("nmaxmerge", 5)
 
     # Other parameters
-    USE_LIFTING_INDEX = config.get("use_lifting_index", True)
-
-    if USE_LIFTING_INDEX:
-        lifting_index_data_dir = config["lifting_index_data_directory"]
-        lifting_index_data_var = config["liting_index_var_name"]
-    
     USE_MULTIPROCESSING = config.get("use_multiprocessing", True)
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
@@ -113,12 +107,27 @@ def main():
     detection_results_file = os.path.join(output_path, "detection_results.nc")
 
     # List all NetCDF files in the directory
-    file_list = sorted(glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}")))
-    if not file_list:
+    precip_file_list = sorted(glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}")))
+    if not precip_file_list:
         raise FileNotFoundError(
             "File directory is empty or no files found matching the specified suffix. Exiting..."
         )
 
+    # Other parameters: Lifting Index
+     USE_LIFTING_INDEX = config.get("use_lifting_index", True)
+
+    if USE_LIFTING_INDEX:
+        lifting_index_data_dir = config["lifting_index_data_directory"]
+        lifting_index_data_var = config["liting_index_var_name"]
+
+        lifting_index_file_list = sorted(glob.glob(os.path.join(lifting_index_data_dir, f"*{file_suffix}")))
+        if not lifting_index_file_list:
+            raise FileNotFoundError(
+                "File directory is empty or no files found matching the specified suffix. Exiting..."
+            )
+    else:
+        lifting_index_file_list = [None] * len(precip_file_list)
+     
     # List to hold detection results
     detection_results = []
 
@@ -149,7 +158,8 @@ def main():
                 futures = [
                     executor.submit(
                         process_file,
-                        file_path,
+                        precip_file_path,
+                        lifting_index_file_path,
                         data_var,
                         lat_name,
                         lon_name,
@@ -159,16 +169,17 @@ def main():
                         min_nr_plumes,
                         grid_spacing_km,
                     )
-                    for file_path in file_list
+                    for precip_file_path, lifting_index_file_path in zip(precip_file_list, lifting_index_file_list)
                 ]
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
                     detection_results.append(detection_result)
         else:
             # Process files sequentially
-            for file_path in file_list:
+            for precip_file_path, lifting_index_file_path in zip(precip_file_list,lifting_index_file_list):
                 detection_result = detect_mcs_in_file(
-                    file_path,
+                    precip_file_path,
+                    lifting_index_file_path,
                     data_var,
                     lat_name,
                     lon_name,
