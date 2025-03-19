@@ -9,7 +9,7 @@ output_path: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/"
 tracking_output_dir: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/"
 
 grid_size_km: 11.0
-precip_var_name: "pr"
+precip_var_name: "precipitation"
 liting_index_var_name: "LI"
 lat_name: "lat"
 lon_name: "lon"

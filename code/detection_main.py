@@ -9,13 +9,16 @@ from detection_helper_func import (
 )
 from detection_filter_func import (
     filter_mcs_candidates,
+    lifting_index_filter,
     compute_cluster_centers_of_mass,
 )
 
 
 def detect_mcs_in_file(
-    file_path,
-    data_var,
+    precip_file_path,
+    precip_data_var,
+    lifting_index_file_path,
+    lifting_index_data_var,
     lat_name,
     lon_name,
     heavy_precip_threshold,
@@ -29,8 +32,10 @@ def detect_mcs_in_file(
     Detect MCSs in a single file.
 
     Parameters:
-    - file_path: Path to the NetCDF file containing precipitation data.
-    - data_var: Variable name of detected variable.
+    - precip_file_path: Path to the NetCDF file containing precipitation data.
+    - precip_data_var: Variable name of detected precipitation variable.
+    - lifting_index_file_path: Path to the NetCDF file containing the lifting index data.
+    - lifting_index_data_var: Variable name of the lifting index.
     - heavy_precip_threshold: Threshold for heavy precipitation (mm/h).
     - moderate_precip_threshold: Threshold for moderate precipitation (mm/h).
     - min_size_threshold: Minimum size threshold for clusters (number of grid cells).
@@ -45,7 +50,11 @@ def detect_mcs_in_file(
 
     # Load data
     ds, lat, lon, precipitation = load_data(
-        file_path, data_var, lat_name, lon_name, time_index
+        precip_file_path, precip_data_var, lat_name, lon_name, time_index
+    )
+
+    ds_li, lat, lon, lifting_index = load_data(
+        lifting_index_file_path, lifting_index_data_var, lat_name, lon_name, time_index
     )
 
     # Step 1: Smooth the precipitation field
@@ -75,7 +84,7 @@ def detect_mcs_in_file(
         max_passes=10,
     )
 
-    # Step 4: Filter MCS candidates based on number of convective plumes and area
+    # Step 4: Filter MCS candidates based on number of convective plumes and area and lifting index
     grid_cell_area_km2 = grid_spacing_km**2
     mcs_candidate_labels = filter_mcs_candidates(
         expanded_labels,
@@ -90,6 +99,12 @@ def detect_mcs_in_file(
         np.isin(expanded_labels, mcs_candidate_labels), expanded_labels, 0
     )
 
+    lifting_index_regions = lifting_index_filter(
+        ds_li[lifting_index_data_var].values,
+        final_labeled_regions,
+        lifting_index_threshold=-2,
+    )
+
     # Step 5: Compute cluster centers of mass
     cluster_centers = compute_cluster_centers_of_mass(
         final_labeled_regions, lat, lon, precipitation
@@ -97,8 +112,8 @@ def detect_mcs_in_file(
 
     # Prepare detection result
     detection_result = {
-        "file_path": file_path,
         "final_labeled_regions": final_labeled_regions,
+        "lifting_index_regions": lifting_index_regions,
         "lat": lat,
         "lon": lon,
         "precipitation": precipitation_smooth,
@@ -107,5 +122,5 @@ def detect_mcs_in_file(
         "center_points": cluster_centers,
     }
 
-    logger.info(f"MCS detection completed for {file_path}.")
+    logger.info(f"MCS detection completed for {precip_file_path}.")
     return detection_result

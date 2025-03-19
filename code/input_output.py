@@ -77,6 +77,11 @@ def load_data(file_path, data_var, lat_name, lon_name, time_index=0):
     # Convert the precipitation data to mm/h using the separate conversion function.
     prec = convert_precip_units(prec, target_unit="mm/h")
 
+    # Remove all non relevant data variables from dataset
+    data_vars_list = [data_var for data_var in ds.data_vars]
+    data_vars_list.remove(data_var)
+    ds = ds.drop_vars(data_vars_list)
+
     return ds, lat, lon, prec
 
 
@@ -113,6 +118,7 @@ def save_detection_results(detection_results, output_filepath, data_source):
     """
     times = []
     final_labeled_regions_list = []
+    lifting_index_regions_list = []
     lat = None
     lon = None
     center_points_list = []  # Will store JSON-encoded center points
@@ -124,6 +130,7 @@ def save_detection_results(detection_results, output_filepath, data_source):
         )  # Round the time values to the nearest second
 
         final_labeled_regions_list.append(detection_result["final_labeled_regions"])
+        lifting_index_regions_list.append(detection_result["lifting_index_regions"])
 
         if lat is None:
             lat = detection_result["lat"]
@@ -142,10 +149,14 @@ def save_detection_results(detection_results, output_filepath, data_source):
 
     # Stack the final_labeled_regions along a new time dimension
     final_labeled_regions_array = np.stack(final_labeled_regions_list, axis=0)
+    lifting_index_regions_array = np.stack(lifting_index_regions_list, axis=0)
 
     # Create an xarray Dataset
     ds = xr.Dataset(
-        {"final_labeled_regions": (["time", "y", "x"], final_labeled_regions_array)},
+        {
+            "final_labeled_regions": (["time", "y", "x"], final_labeled_regions_array),
+            "lifting_index_regions": (["time", "y", "x"], lifting_index_regions_array),
+        },
         coords={
             "time": times,
             "y": np.arange(final_labeled_regions_array.shape[1]),

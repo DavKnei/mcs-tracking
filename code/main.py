@@ -21,8 +21,10 @@ sys.excepthook = handle_exception
 
 # Define a function for parallel processing
 def process_file(
-    file_path,
-    data_var,
+    precip_file_path,
+    precip_data_var,
+    lifting_index_file_path,
+    lifting_index_data_var,
     lat_name,
     lon_name,
     heavy_precip_threshold,
@@ -32,8 +34,10 @@ def process_file(
     grid_spacing_km,
 ):
     result = detect_mcs_in_file(
-        file_path,
-        data_var,
+        precip_file_path,
+        precip_data_var,
+        lifting_index_file_path,
+        lifting_index_data_var,
         lat_name,
         lon_name,
         heavy_precip_threshold,
@@ -94,7 +98,6 @@ def main():
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
 
-
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
     setup_logging(output_path)
@@ -107,27 +110,32 @@ def main():
     detection_results_file = os.path.join(output_path, "detection_results.nc")
 
     # List all NetCDF files in the directory
-    precip_file_list = sorted(glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}")))
+    precip_file_list = sorted(
+        glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}"))
+    )
     if not precip_file_list:
         raise FileNotFoundError(
             "File directory is empty or no files found matching the specified suffix. Exiting..."
         )
 
     # Other parameters: Lifting Index
-     USE_LIFTING_INDEX = config.get("use_lifting_index", True)
+    USE_LIFTING_INDEX = config.get("use_lifting_index", True)
 
     if USE_LIFTING_INDEX:
         lifting_index_data_dir = config["lifting_index_data_directory"]
         lifting_index_data_var = config["liting_index_var_name"]
 
-        lifting_index_file_list = sorted(glob.glob(os.path.join(lifting_index_data_dir, f"*{file_suffix}")))
+        lifting_index_file_list = sorted(
+            glob.glob(os.path.join(lifting_index_data_dir, f"*{file_suffix}"))
+        )
         if not lifting_index_file_list:
             raise FileNotFoundError(
                 "File directory is empty or no files found matching the specified suffix. Exiting..."
             )
     else:
         lifting_index_file_list = [None] * len(precip_file_list)
-     
+        lifting_index_data_var = None
+
     # List to hold detection results
     detection_results = []
 
@@ -159,8 +167,9 @@ def main():
                     executor.submit(
                         process_file,
                         precip_file_path,
+                        precip_data_var,
                         lifting_index_file_path,
-                        data_var,
+                        lifting_index_data_var,
                         lat_name,
                         lon_name,
                         heavy_precip_threshold,
@@ -169,18 +178,23 @@ def main():
                         min_nr_plumes,
                         grid_spacing_km,
                     )
-                    for precip_file_path, lifting_index_file_path in zip(precip_file_list, lifting_index_file_list)
+                    for precip_file_path, lifting_index_file_path in zip(
+                        precip_file_list, lifting_index_file_list
+                    )
                 ]
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
                     detection_results.append(detection_result)
         else:
             # Process files sequentially
-            for precip_file_path, lifting_index_file_path in zip(precip_file_list,lifting_index_file_list):
+            for precip_file_path, lifting_index_file_path in zip(
+                precip_file_list, lifting_index_file_list
+            ):
                 detection_result = detect_mcs_in_file(
                     precip_file_path,
+                    precip_data_var,
                     lifting_index_file_path,
-                    data_var,
+                    lifting_index_data_var,
                     lat_name,
                     lon_name,
                     heavy_precip_threshold,
