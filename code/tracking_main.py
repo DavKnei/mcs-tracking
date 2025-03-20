@@ -94,9 +94,6 @@ def track_mcs(
     # Determine if LI filtering is available (only need to check detection_results[0])
     use_li = use_li_filter and ("lifting_index_regions" in detection_results[0])
 
-    # Optionally limit number of timesteps for testing:
-    detection_results = detection_results[:70]
-
     for idx, detection_result in enumerate(detection_results):
         final_labeled_regions = detection_result["final_labeled_regions"]
         center_points_dict = detection_result.get("center_points", {})
