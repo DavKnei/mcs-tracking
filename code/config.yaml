@@ -17,19 +17,19 @@ data_source: "IMERG precipitation and ERA5 Lifting Index"
 
 # Detection parametersS
 min_size_threshold: 10
-heavy_precip_threshold: 10.0
+heavy_precip_threshold: 8.0
 moderate_precip_threshold: 1.0
 min_nr_plumes: 1
 
 
 # Tracking parameters
-main_lifetime_thresh: 6
-main_area_thresh: 10000
+main_lifetime_thresh: 5
+main_area_thresh: 1000
 grid_cell_area_km2: 1
 nmaxmerge: 5
 
 # Other parameters
 use_lifting_index: True
-detection: True
-use_multiprocessing: True
+detection: False
+use_multiprocessing: False
 number_of_cores: 4

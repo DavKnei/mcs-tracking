@@ -189,3 +189,61 @@ def handle_continuation(
     mcs_lifetime[mask] = lifetime_dict[old_track_id]
     if area_km2 > max_area_dict[old_track_id]:
         max_area_dict[old_track_id] = area_km2
+
+
+def compute_max_consecutive(bool_list):
+    """
+    Compute the maximum number of consecutive True values in a Boolean list.
+
+    Args:
+        bool_list (List[bool]): List of Boolean values.
+
+    Returns:
+        int: Maximum consecutive True values.
+    """
+    max_cons = 0
+    current = 0
+    for b in bool_list:
+        if b:
+            current += 1
+            if current > max_cons:
+                max_cons = current
+        else:
+            current = 0
+    return max_cons
+
+
+def apply_robust_mask(arr, robust_flag_dict):
+    """
+    Vectorized function that returns track id if robust_flag_dict[tid] is True, else 0.
+
+    Args:
+        arr (np.ndarray): 2D array of track IDs.
+        robust_flag_dict (dict): Dictionary mapping track id to robust flag (bool).
+
+    Returns:
+        np.ndarray: Masked array with only robust track IDs.
+    """
+    vec_lookup = np.vectorize(
+        lambda tid: tid if robust_flag_dict.get(tid, False) else 0
+    )
+    return vec_lookup(arr)
+
+
+def build_tracking_centers(previous_cluster_ids, center_points_dict):
+    """
+    Build a dictionary mapping track id to center coordinates using the provided center_points.
+
+    Args:
+        previous_cluster_ids (dict): Mapping from detection label to track id.
+        center_points_dict (dict): Mapping from detection label (as string) to (lat, lon) tuple.
+
+    Returns:
+        dict: Mapping from track id (as string) to (center_lat, center_lon).
+    """
+    centers = {}
+    for lbl, tid in previous_cluster_ids.items():
+        tid_str = str(tid)
+        if tid_str in center_points_dict:
+            centers[tid_str] = center_points_dict[tid_str]
+    return centers
