@@ -143,7 +143,9 @@ def main():
     detection_results_exist = os.path.exists(detection_results_file)
 
     if detection_results_exist and not DO_DETECTION:
-        detection_results = load_detection_results(detection_results_file)
+        detection_results = load_detection_results(
+            detection_results_file, USE_LIFTING_INDEX
+        )
         if detection_results is not None:
             logger.info("Detection results loaded from file. Skipping detection step.")
         else:
@@ -217,6 +219,7 @@ def main():
     # Perform tracking
     logger.info("Tracking of MCS...")
     (
+        robust_mcs_ids_list,
         mcs_ids_list,
         main_mcs_ids,
         lifetime_list,
@@ -232,13 +235,16 @@ def main():
         main_area_thresh,
         grid_cell_area_km2,
         nmaxmerge,
+        use_li_filter=True,
     )
     logger.info("Tracking of MCS finished.")
 
     main_mcs_ids_list = filter_main_mcs(mcs_ids_list, main_mcs_ids)
+    robust_mcs_ids_list = filter_main_mcs(robust_mcs_ids_list, main_mcs_ids)
 
     # Save tracking results (use filtered lists if desired)
     save_tracking_results_to_netcdf(
+        robust_mcs_ids_list,
         mcs_ids_list,
         main_mcs_ids_list,
         lifetime_list,

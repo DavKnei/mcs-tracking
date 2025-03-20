@@ -183,7 +183,7 @@ def save_detection_results(detection_results, output_filepath, data_source):
     print(f"Detection results saved to {output_filepath}")
 
 
-def load_detection_results(input_filepath):
+def load_detection_results(input_filepath, USE_LIFTING_INDEX):
     """
     Load detection results from a NetCDF file, including each timestep's center-of-mass
     information if present.
@@ -194,6 +194,7 @@ def load_detection_results(input_filepath):
 
     Args:
         input_filepath (str): Path to the input NetCDF file.
+        USE_LIFTING_INDEX (boolean): Flag if lifting_index_regions is present or not
 
     Returns:
         List[dict]: A list of detection_result dictionaries, where each dictionary
@@ -216,12 +217,24 @@ def load_detection_results(input_filepath):
         print(f"Error opening {input_filepath}: {e}")
         return None
 
-    # Check if required data variables are present
-    required_vars = ["final_labeled_regions", "lat", "lon", "time"]
+    if USE_LIFTING_INDEX:
+        required_vars = [
+            "final_labeled_regions",
+            "lifting_index_regions",
+            "lat",
+            "lon",
+            "time",
+        ]
+    else:
+        required_vars = ["final_labeled_regions", "lat", "lon", "time"]
+
     for var in required_vars:
         if var not in ds.variables and var not in ds.coords:
             print(f"Variable {var} not found in {input_filepath}.")
             return None
+
+    if USE_LIFTING_INDEX:
+        lifting_index_regions_array = ds["lifting_index_regions"].values
 
     # Extract data
     final_labeled_regions_array = ds["final_labeled_regions"].values
@@ -255,22 +268,32 @@ def load_detection_results(input_filepath):
         else:
             center_points_dict = {}
 
-        detection_result = {
-            "final_labeled_regions": labeled_regions_2d,
-            "time": time_val,
-            "lat": lat,
-            "lon": lon,
-            "center_points": center_points_dict,
-        }
+        if USE_LIFTING_INDEX:
+            detection_result = {
+                "lifting_index_regions": lifting_index_regions_array[idx],
+                "final_labeled_regions": labeled_regions_2d,
+                "time": time_val,
+                "lat": lat,
+                "lon": lon,
+                "center_points": center_points_dict,
+            }
+        else:
+            detection_result = {
+                "final_labeled_regions": labeled_regions_2d,
+                "time": time_val,
+                "lat": lat,
+                "lon": lon,
+                "center_points": center_points_dict,
+            }
         detection_results.append(detection_result)
 
     ds.close()
     print(f"Detection results loaded from {input_filepath}")
-
     return detection_results
 
 
 def save_tracking_results_to_netcdf(
+    robust_mcs_ids_list,
     mcs_id_list,
     main_mcs_id_list,
     lifetime_list,
@@ -329,6 +352,7 @@ def save_tracking_results_to_netcdf(
     # Stack arrays along the time dimension
     mcs_id = np.stack(mcs_id_list, axis=0)  # (time, y, x)
     main_mcs_id = np.stack(main_mcs_id_list, axis=0)  # (time, y, x)
+    robust_mcs_id = np.stack(robust_mcs_ids_list, axis=0)  # (time, y, x)
     lifetime_all = np.stack(lifetime_list, axis=0)  # (time, y, x)
 
     # Create an xarray Dataset
@@ -336,6 +360,7 @@ def save_tracking_results_to_netcdf(
         {
             "mcs_id": (["time", "y", "x"], mcs_id),
             "main_mcs_id": (["time", "y", "x"], main_mcs_id),
+            "robust_mcs_id": (["time", "y", "x"], robust_mcs_id),
             "lifetime": (["time", "y", "x"], lifetime_all),
         },
         coords={
@@ -354,6 +379,9 @@ def save_tracking_results_to_netcdf(
         "description"
     ] = "Track IDs of all MCSs (including merges and splits)"
     ds["main_mcs_id"].attrs["description"] = "Track IDs of main MCSs (filtered subset)"
+    ds["robust_mcs_id"].attrs[
+        "description"
+    ] = "Track IDs of main MCSs that fulfill lifting index criteria"
     ds["lifetime"].attrs["description"] = "Lifetime of all clusters (in timesteps)"
     ds["lat"].attrs["description"] = "Latitude coordinate"
     ds["lon"].attrs["description"] = "Longitude coordinate"
@@ -372,25 +400,39 @@ def save_tracking_results_to_netcdf(
     # 2) Main track center points: center_points_t{i}, filtered by main_mcs_id
     num_timesteps = len(time_list)
     for i in range(num_timesteps):
-        full_centers_dict = tracking_centers_list[i]  # track_id -> (lat, lon)
-        full_centers_dict_str = serialize_center_points(full_centers_dict)
-        full_centers_json = json.dumps(full_centers_dict_str)
+        # Get the full center points for timestep i.
+        full_centers_dict = tracking_centers_list[
+            i
+        ]  # e.g. { "101": (lat, lon), "102": (lat, lon), ... }
+        full_centers_serialized = serialize_center_points(full_centers_dict)
+        full_centers_json = json.dumps(full_centers_serialized)
         ds["mcs_id"].attrs[f"center_points_t{i}"] = full_centers_json
 
-        # Filter the dictionary to only main track IDs that appear at this timestep
-        # We identify them by scanning main_mcs_id[i]
-        main_ids_2d = main_mcs_id[i]
+        # For main_mcs_id: filter full centers to those track IDs that appear in main_mcs_id.
+        main_ids_2d = ds["main_mcs_id"].isel(time=i).values
         used_main_ids = np.unique(main_ids_2d)
         used_main_ids = used_main_ids[used_main_ids != 0]
-
         main_centers_dict = {}
         for tid in used_main_ids:
-            if str(tid) in full_centers_dict:
-                main_centers_dict[str(tid)] = full_centers_dict[str(tid)]
-
-        main_centers_dict_str = serialize_center_points(main_centers_dict)
-        main_centers_json = json.dumps(main_centers_dict_str)
+            tid_str = str(tid)
+            if tid_str in full_centers_dict:
+                main_centers_dict[tid_str] = full_centers_dict[tid_str]
+        main_centers_serialized = serialize_center_points(main_centers_dict)
+        main_centers_json = json.dumps(main_centers_serialized)
         ds["main_mcs_id"].attrs[f"center_points_t{i}"] = main_centers_json
+
+        # For robust_mcs_id: filter full centers to those track IDs that appear in robust_mcs_id.
+        robust_ids_2d = ds["robust_mcs_id"].isel(time=i).values
+        used_robust_ids = np.unique(robust_ids_2d)
+        used_robust_ids = used_robust_ids[used_robust_ids != 0]
+        robust_centers_dict = {}
+        for tid in used_robust_ids:
+            tid_str = str(tid)
+            if tid_str in full_centers_dict:
+                robust_centers_dict[tid_str] = full_centers_dict[tid_str]
+        robust_centers_serialized = serialize_center_points(robust_centers_dict)
+        robust_centers_json = json.dumps(robust_centers_serialized)
+        ds["robust_mcs_id"].attrs[f"center_points_t{i}"] = robust_centers_json
 
     # Save the NetCDF file
     output_filepath = os.path.join(output_dir, "mcs_tracking_results.nc")
