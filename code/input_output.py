@@ -28,7 +28,7 @@ def convert_precip_units(prec, target_unit="mm/h"):
         factor = 1000.0
     elif orig_units in ["kg m-2 s-1"]:
         factor = 3600.0
-    elif orig_units in ["mm", "mm/h", "mm/hr", "kg m-2"]:
+    elif orig_units in ["mm", "mm/h", "mm/hr", "kg m-2", ""]:
         factor = 1.0
     else:
         print(
