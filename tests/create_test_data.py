@@ -66,7 +66,7 @@ def save_single_timestep(out_dir, scenario_name, current_time, lat2d, lon2d, pr_
     )
     ds["pr"].attrs["units"] = "mm/h"
     ds["pr"].attrs["long_name"] = "precipitation"
-    ds["li"].attrs["units"] = "K"
+    ds["li"].attrs["units"] = "Kelvin"
     ds["li"].attrs["long_name"] = "lifting index"
     file_name = f"{scenario_name}_{current_time:%Y-%m-%d-%H-00}.nc_test"
     file_path = os.path.join(out_dir, file_name)
