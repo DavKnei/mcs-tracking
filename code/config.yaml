@@ -5,7 +5,7 @@
 precip_data_directory: "/data/reloclim/backup/MCS_database/raw_data/mcstracking/2017/08/"
 lifting_index_data_directory: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/data/ERA5/hourly/201708/hourly"
 file_suffix: ".nc"
-output_path: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/201708/hourly"
+detection_output_path: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/201708/hourly"
 tracking_output_dir: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/201708/hourly"
 
 grid_size_km: 11.0

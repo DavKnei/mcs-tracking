@@ -73,7 +73,7 @@ def main():
     # Access parameters from config
     precip_data_dir = config["precip_data_directory"]
     file_suffix = config["file_suffix"]
-    output_path = config["output_path"]
+    detection_output_path = config["detection_output_path"]
     tracking_output_dir = config["tracking_output_dir"]
     grid_spacing_km = config["grid_size_km"]
     precip_data_var = config["precip_var_name"]
@@ -98,16 +98,16 @@ def main():
     NUMBER_OF_CORES = config.get("number_of_cores", 24)
     DO_DETECTION = config.get("detection", True)
 
-    if not os.path.isdir(output_path):
-        os.makedirs(output_path)
-    setup_logging(output_path)
+    if not os.path.isdir(detection_output_path):
+        os.makedirs(detection_output_path)
+    setup_logging(detection_output_path)
     logger.info("Loading Configuration finished.")
 
     # Ensure directories exist
-    os.makedirs(output_path, exist_ok=True)
+    os.makedirs(detection_output_path, exist_ok=True)
     os.makedirs(tracking_output_dir, exist_ok=True)
 
-    detection_results_file = os.path.join(output_path, "detection_results.nc")
+    detection_results_file = os.path.join(detection_output_path, "detection_results.nc")
 
     # List all NetCDF files in the directory
     precip_file_list = sorted(
