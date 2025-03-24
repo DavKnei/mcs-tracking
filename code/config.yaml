@@ -3,10 +3,10 @@
 
 # Data
 precip_data_directory: "/data/reloclim/backup/MCS_database/raw_data/mcstracking/2017/08/"
-lifting_index_data_directory: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/data/ERA5/hourly/201708/"
+lifting_index_data_directory: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/data/ERA5/hourly/201708/hourly"
 file_suffix: ".nc"
-output_path: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/"
-tracking_output_dir: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/"
+output_path: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/201708/hourly"
+tracking_output_dir: "/nas/home/dkn/Desktop/MoCCA/Derechos/LI_test/output/201708/hourly"
 
 grid_size_km: 11.0
 precip_var_name: "precipitation"
@@ -24,12 +24,12 @@ min_nr_plumes: 1
 
 # Tracking parameters
 main_lifetime_thresh: 5
-main_area_thresh: 1000
-grid_cell_area_km2: 1
+main_area_thresh: 2000
+grid_cell_area_km2: 121
 nmaxmerge: 5
 
 # Other parameters
 use_lifting_index: True
 detection: False
-use_multiprocessing: False
-number_of_cores: 4
+use_multiprocessing: True
+number_of_cores: 32
