@@ -28,7 +28,7 @@ def convert_precip_units(prec, target_unit="mm/h"):
         factor = 1000.0
     elif orig_units in ["kg m-2 s-1"]:
         factor = 3600.0
-    elif orig_units in ["mm", "mm/h", "mm/hr", "kg m-2", ""]:
+    elif orig_units in ["mm", "mm/h", "mm/hr", "kg m-2"]:
         factor = 1.0
     else:
         print(
@@ -41,7 +41,38 @@ def convert_precip_units(prec, target_unit="mm/h"):
     return new_prec
 
 
-def load_data(file_path, data_var, lat_name, lon_name, time_index=0):
+def convert_lifting_index_units(li, target_unit="K"):
+    """
+    Convert the lifting index DataArray to the target unit.
+
+    Recognized unit conversions:
+      - degree Celcius to K
+
+    Parameters:
+    - li: xarray DataArray of precipitation values.
+    - target_unit: Desired unit for the output (default: "K").
+
+    Returns:
+    - new_prec: DataArray with converted values and updated units attribute.
+    """
+    orig_units = li.attrs.get("units", "")
+
+    if orig_units in ["K", "Kelvin"]:
+        constant = 0
+    elif orig_units in ["°C", "degree_Celcius"]:
+        constant = 273.15
+    else:
+        print(
+            f"Warning: Unrecognized precipitation units '{orig_units}'. No conversion applied."
+        )
+        factor = 1.0
+
+    new_li = li + constant
+    new_li.attrs["units"] = target_unit
+    return new_li
+
+
+def load_precipitation_data(file_path, data_var, lat_name, lon_name, time_index=0):
     """
     Load the dataset and select the specified time step, scaling the precipitation
     variable to units of mm/h for consistency with the detection threshold.
@@ -73,16 +104,50 @@ def load_data(file_path, data_var, lat_name, lon_name, time_index=0):
         lat, lon = latitude, longitude
 
     prec = ds[str(data_var)]
+    return ds, lat, lon, prec
 
-    # Convert the precipitation data to mm/h using the separate conversion function.
-    prec = convert_precip_units(prec, target_unit="mm/h")
+
+def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=0):
+    """
+    Load the dataset and select the specified time step, scaling the lifting_index data
+    variable to units of K for consistency with the detection threshold.
+
+    Parameters:
+    - file_path: Path to the NetCDF file.
+    - data_var: Name of the precipitation variable.
+    - lat_name: Name of the latitude variable.
+    - lon_name: Name of the longitude variable.
+    - time_index: Index of the time step to select.
+
+    Returns:
+    - ds: xarray Dataset for the selected time.
+    - lat: 2D array of latitudes.
+    - lon: 2D array of longitudes.
+    - prec: 2D DataArray of precipitation values (scaled to mm/h).
+    """
+    ds = xr.open_dataset(file_path)
+    ds = ds.isel(time=time_index)  # Select the specified time step
+    ds["time"] = ds["time"].values.astype("datetime64[ns]")
+
+    latitude = ds[lat_name].values
+    longitude = ds[lon_name].values
+
+    # Ensure lat and lon are 2D arrays.
+    if latitude.ndim == 1 and longitude.ndim == 1:
+        lon, lat = np.meshgrid(longitude, latitude)
+    else:
+        lat, lon = latitude, longitude
+
+    li = ds[str(data_var)]
+    # Convert the lifting index data to K using the separate conversion function.
+    li = convert_lifting_index_units(li, target_unit="K")
 
     # Remove all non relevant data variables from dataset
     data_vars_list = [data_var for data_var in ds.data_vars]
     data_vars_list.remove(data_var)
     ds = ds.drop_vars(data_vars_list)
 
-    return ds, lat, lon, prec
+    return ds, lat, lon, li
 
 
 def serialize_center_points(center_points):

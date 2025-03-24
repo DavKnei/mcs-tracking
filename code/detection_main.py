@@ -1,6 +1,6 @@
 import numpy as np
 import logging
-from input_output import load_data
+from input_output import load_precipitation_data, load_lifting_index_data
 from detection_helper_func import (
     smooth_precipitation_field,
     detect_cores_connected,
@@ -49,11 +49,11 @@ def detect_mcs_in_file(
     logger = logging.getLogger(__name__)
 
     # Load data
-    ds, lat, lon, precipitation = load_data(
+    ds, lat, lon, precipitation = load_precipitation_data(
         precip_file_path, precip_data_var, lat_name, lon_name, time_index
     )
 
-    ds_li, lat, lon, lifting_index = load_data(
+    ds_li, lat, lon, lifting_index = load_lifting_index_data(
         lifting_index_file_path, lifting_index_data_var, lat_name, lon_name, time_index
     )
 
