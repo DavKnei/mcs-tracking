@@ -24,54 +24,83 @@ def filter_main_mcs(mcs_ids_list, main_mcs_ids):
 def filter_relevant_systems(
     mcs_ids_list, main_mcs_ids, merging_events, splitting_events
 ):
-    """
-    Filters the tracking results to include only relevant track IDs. Main MCSs and systems that merge into
-    MCSs or split of MCSs.
+    """Expands a set of main MCS tracks to include their full 'family tree'.
 
-    This function computes the union of:
-      - main_mcs_ids (the main MCS tracks that satisfy the area–lifetime criteria),
-      - All track IDs involved in merging events (both the parent IDs and the child ID), and
-      - All track IDs involved in splitting events (both the parent ID and all child IDs).
+    This function identifies all systems that are directly or indirectly connected
+    to a 'main' MCS through merging or splitting events. It begins with the
+    provided list of main MCS track IDs and iteratively searches for all parent
+    systems that merged into them and all child systems that split from them.
+    This process repeats to find the entire lineage (e.g., grandparents,
+    grandchildren), ensuring that the complete history of all relevant convective
+    elements is preserved.
 
-    It then processes the list of MCS ID arrays (mcs_ids_list) such that any pixel value
-    that is not in this union is set to 0.
+    The final output is a series of 2D arrays where any track that is not
+    part of this 'family tree' is removed (i.e., set to 0).
 
     Args:
-        mcs_ids_list (List[np.ndarray]): List of 2D arrays (one per timestep) with track IDs.
-        main_mcs_ids (List[int]): List of track IDs that satisfy the main MCS criteria.
-        merging_events (List[MergingEvent]): List of merging events recorded during tracking.
-        splitting_events (List[SplittingEvent]): List of splitting events recorded during tracking.
+        mcs_ids_list (List[np.ndarray]): The complete, unfiltered list of 2D
+            track ID arrays, one for each timestep, as produced by the initial
+            tracking logic.
+        main_mcs_ids (List[int]): A list of integer track IDs that have already
+            been identified as 'main' MCSs based on area and lifetime criteria.
+            This is the starting set of relevant systems.
+        merging_events (List[MergingEvent]): A list of all MergingEvent objects
+            recorded during the tracking process.
+        splitting_events (List[SplittingEvent]): A list of all SplittingEvent
+            objects recorded during the tracking process.
 
     Returns:
-        List[np.ndarray]: A new list of 2D arrays where any pixel with a track ID not in the
-                          union of relevant IDs is set to 0.
+        List[np.ndarray]: A new list of 2D arrays containing the filtered
+            track IDs. In these arrays, any track ID not part of the 'family
+            tree' of a main MCS has been set to 0.
 
     Usage:
-        After running track_mcs(), suppose you obtain:
+        # After running the main tracking function:
+        (
+            robust_mcs_id, main_mcs_id, _, lifetime_list, time_list, lat, lon,
+            merging_events, splitting_events, _
+        ) = track_mcs(...)
 
-            mcs_ids_list, main_mcs_ids, lifetime_list, time_list, lat, lon,
-            merging_events, splitting_events, tracking_centers_list = track_mcs(...)
+        # To get the full family tree based on the list of main MCS IDs:
+        main_mcs_ids_list = [np.unique(arr[arr > 0]) for arr in main_mcs_id]
+        unique_main_ids = np.unique(np.concatenate(main_mcs_ids_list))
 
-        Then, to filter out ephemeral tracks that never merged or split into a main MCS, do:
-
-            filtered_mcs_ids_list = filter_relevant_mcs(
-                mcs_ids_list, main_mcs_ids, merging_events, splitting_events
-            )
+        full_family_tree = filter_relevant_systems(
+            mcs_ids_list, # The original, unfiltered list from tracking
+            unique_main_ids,
+            merging_events,
+            splitting_events
+        )
     """
     # Start with the main MCS IDs.
     relevant_ids = set(main_mcs_ids)
 
-    # Add IDs involved in merging events of MCSs.
-    for event in merging_events:
-        if event.child_id in relevant_ids:
-            relevant_ids.update(event.parent_ids)
-            relevant_ids.add(event.child_id)
+    # Iteratively add parent/child IDs from merging/splitting events
+    # connected to the set of relevant IDs. This ensures the full family tree is found.
+    for _ in range(
+        10
+    ):  # Iterate a few times to catch multi-step parent/child relationships
+        new_ids_found = False
+        # Add IDs involved in merging events
+        for event in merging_events:
+            # If the child is relevant, all parents become relevant
+            if event.child_id in relevant_ids:
+                for pid in event.parent_ids:
+                    if pid not in relevant_ids:
+                        relevant_ids.add(pid)
+                        new_ids_found = True
 
-    # Add IDs involved in splitting events of MCSs.
-    for event in splitting_events:
-        if event.parent_id in relevant_ids:
-            relevant_ids.add(event.parent_id)
-            relevant_ids.update(event.child_ids)
+        # Add IDs involved in splitting events
+        for event in splitting_events:
+            # If the parent is relevant, all children become relevant
+            if event.parent_id in relevant_ids:
+                for cid in event.child_ids:
+                    if cid not in relevant_ids:
+                        relevant_ids.add(cid)
+                        new_ids_found = True
+
+        if not new_ids_found:
+            break
 
     # Filter each timestep's array: only keep values in relevant_ids.
     filtered_mcs_ids_list = []

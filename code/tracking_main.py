@@ -13,15 +13,13 @@ merging and splitting events, and tracking center positions.
 import numpy as np
 import logging
 from collections import defaultdict
-from tracking_filter_func import filter_relevant_systems
+from tracking_filter_func import filter_main_mcs, filter_relevant_systems
 from tracking_helper_func import (
     assign_new_id,
     check_overlaps,
     handle_continuation,
     handle_no_overlap,
     compute_max_consecutive,
-    apply_robust_mask,
-    build_tracking_centers,
 )
 from tracking_merging import handle_merging
 from tracking_splitting import handle_splitting
@@ -35,41 +33,46 @@ def track_mcs(
     main_area_thresh,
     grid_cell_area_km2,
     nmaxmerge,
-    use_li_filter=True,  # Flag to enable LI filtering if available
+    use_li_filter
 ):
     """
-    Tracks MCSs across multiple timesteps using spatial overlap and stable ID assignment.
-    Additionally, if the detection_results include a variable "lifting_index_regions", then
-    a track is considered robust only if at least one timestep in its lifetime satisfies the LI criteria.
+    Tracks Mesoscale Convective Systems (MCSs) and filters them based on a combined set of criteria.
+
+    This function first tracks all detected precipitation features over time using spatial overlap,
+    handling complex merging and splitting events. After the initial tracking, it performs a
+    rigorous filtering step to identify "main MCSs". A track qualifies as a main MCS only if it
+    contains a continuous period of at least 'main_lifetime_thresh' hours where, simultaneously,
+    its area is greater than 'main_area_thresh' and it is in a convective environment (if 'use_li_filter' is True).
+
+    The function returns three distinct sets of track IDs representing different levels of filtering,
+    from the most restrictive ("in-phase" MCSs) to the most inclusive ("full family tree").
 
     Args:
-        detection_results (List[dict]): Each dict contains:
-            - "final_labeled_regions" (2D array of labels),
-            - "lifting_index_regions" (2D binary array; 1 indicates LI criterion met) [optional],
-            - "center_points" (dict mapping label -> (lat, lon)) [optional],
-            - "time" (datetime.datetime),
-            - "lat" (2D array),
-            - "lon" (2D array).
-        main_lifetime_thresh (int): Minimum consecutive lifetime (in timesteps) for main MCS.
-        main_area_thresh (float): Minimum area (km²) that must be reached in each timestep.
-        grid_cell_area_km2 (float): Factor to convert pixel count to area (km²).
-        nmaxmerge (int): Maximum allowed merging/splitting in a single timestep.
-        use_li_filter (bool): If True and if "lifting_index_regions" exists in detection_results,
-                              tracks that never meet the LI criterion (LI==1) are filtered out.
+        detection_results (List[dict]): A list where each dictionary represents one timestep and contains:
+            - "final_labeled_regions" (np.ndarray): 2D array of detected cluster labels.
+            - "lifting_index_regions" (np.ndarray): 2D binary array where 1 indicates a cluster met the LI criterion. Optional, used if 'use_li_filter' is True.
+            - "center_points" (dict): Mapping of cluster label to its (lat, lon) center. Optional.
+            - "time" (datetime.datetime): Timestamp for the data.
+            - "lat" (np.ndarray): 2D array of latitudes.
+            - "lon" (np.ndarray): 2D array of longitudes.
+        main_lifetime_thresh (int): The minimum number of consecutive hours a track must simultaneously meet the area and LI criteria to be considered a main MCS.
+        main_area_thresh (float): The minimum area (in km²) a track must have to be considered in its mature phase.
+        grid_cell_area_km2 (float): The area of a single grid cell in km².
+        nmaxmerge (int): The maximum number of parent systems to consider in a single merging event.
+        use_li_filter (bool): If True, enables the convective environment check based on the "lifting_index_regions" data.
 
     Returns:
-        Tuple:
-            mcs_ids_list (List[np.ndarray]): Track ID arrays per timestep.
-            main_mcs_ids (List[int]): List of IDs considered main MCS by end of tracking.
-            lifetime_list (List[np.ndarray]): Per-timestep 2D arrays for pixel-wise lifetime.
-            time_list (List[datetime.datetime]): Timestamps for each timestep.
-            lat (np.ndarray): 2D lat array from the first timestep.
-            lon (np.ndarray): 2D lon array from the first timestep.
-            merging_events (List): All recorded merging events.
-            splitting_events (List): All recorded splitting events.
-            tracking_centers_list (List[dict]): For each timestep, dict mapping track_id -> (center_lat, center_lon).
-            main_mcs_ids_robust (List[np.ndarray]): Same as mcs_ids_list but with non-robust tracks removed.
-    """
+        Tuple: A tuple containing the following organized results:
+            - robust_mcs_id (List[np.ndarray]): The most restrictive output. Contains track IDs only for the timesteps where the system is **simultaneously** larger than 'main_area_thresh' AND meets the convective LI criteria. This isolates the mature, "in-phase" portion of the MCSs.
+            - main_mcs_id (List[np.ndarray]): Shows the **full lifetime** of all tracks that were identified as main MCSs. This includes their formation and dissipation stages where they may not meet the area or LI criteria.
+            - main_mcs_id_merge_split (List[np.ndarray]): The most inclusive output. Shows the **full "family tree"**, containing the full lifetime of main MCSs plus the full lifetime of all smaller systems that merged into or split from them.
+            - lifetime_list (List[np.ndarray]): A list of 2D arrays showing the pixel-wise lifetime (in timesteps) of all tracked clusters.
+            - time_list (List[datetime.datetime]): A list of the timestamps corresponding to each frame.
+            - lat (np.ndarray): A 2D array of latitude values.
+            - lon (np.ndarray): A 2D array of longitude values.
+            - merging_events (List[MergingEvent]): A list of all recorded merging events.
+            - splitting_events (List[SplittingEvent]): A list of all recorded splitting events.
+            - tracking_centers_list (List[dict]): A list of dictionaries, one for each timestep, mapping track IDs to their (lat, lon) center points."""
     previous_labeled_regions = None
     previous_cluster_ids = {}
     merge_split_cluster_ids = {}
@@ -90,6 +93,7 @@ def track_mcs(
 
     # Dictionary to track robust flag for each assigned track ID.
     robust_flag_dict = {}
+    convective_history = defaultdict(dict)
 
     # Determine if LI filtering is available (only need to check detection_results[0])
     use_li = use_li_filter and ("lifting_index_regions" in detection_results[0])
@@ -152,6 +156,7 @@ def track_mcs(
                 else:
                     is_convective = True
                 robust_flag_dict[assigned_id] = is_convective
+                convective_history[assigned_id][idx] = is_convective
         else:
             # Subsequent timesteps: check overlaps between previous and current clusters.
             overlap_map = check_overlaps(
@@ -187,6 +192,7 @@ def track_mcs(
                     robust_flag_dict[chosen_id] = (
                         robust_flag_dict.get(chosen_id, False) or current_convective
                     )
+                    convective_history[chosen_id][idx] = current_convective
                 else:
                     # Merging: handle multiple overlapping previous clusters.
                     chosen_id = handle_merging(
@@ -213,7 +219,7 @@ def track_mcs(
                         or current_convective
                     )
                     robust_flag_dict[chosen_id] = robust_flag
-
+                    convective_history[chosen_id][idx] = current_convective
             # Handle clusters with no overlap.
             new_assign_map, next_cluster_id = handle_no_overlap(
                 labels_no_overlap,
@@ -281,38 +287,71 @@ def track_mcs(
             centers_this_timestep[str(tid)] = center_latlon
         tracking_centers_list.append(centers_this_timestep)
 
-    # ---- Final Filtering Step Based on Lifetime and Area (unchanged) ----
-    valid_ids = []
-    for tid in list(lifetime_dict.keys()):
-        bool_series = []
-        for mcs_id_array in mcs_ids_list:
-            area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
-            bool_series.append(area >= main_area_thresh)
-        if compute_max_consecutive(bool_series) >= main_lifetime_thresh:
-            valid_ids.append(tid)
-    main_mcs_ids = valid_ids
+    # ---- Final Filtering Step ----
+    # A track is a "main MCS" if it has a continuous period of at least
+    # 'main_lifetime_thresh' where BOTH area and LI criteria are met.
 
-    filtered_mcs_ids_list = filter_relevant_systems(
-        mcs_ids_list, main_mcs_ids, merging_events, splitting_events
+    mcs_ids = []
+    # Iterate through every track that ever existed
+    for tid in list(lifetime_dict.keys()):
+
+        # For each track, create a boolean series indicating when it meets BOTH criteria
+        bool_series_combined = []
+        for i, mcs_id_array in enumerate(mcs_ids_list):
+            area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
+            meets_area_criteria = area >= main_area_thresh
+
+            # Check the convective history for this timestep
+            # If not using LI, all systems are considered convective
+            meets_li_criteria = (
+                convective_history[tid].get(i, False) if use_li else True
+            )
+
+            # Both must be true for the system to be in a robust state at this hour
+            bool_series_combined.append(meets_area_criteria and meets_li_criteria)
+
+        # Now, find the longest continuous period of this robust state
+        if compute_max_consecutive(bool_series_combined) >= main_lifetime_thresh:
+            mcs_ids.append(tid)
+
+    logger.info(
+        f"Tracking identified {len(mcs_ids)} main MCSs after combined filtering."
     )
 
-    # ---- Apply LI robust filtering: remove tracks that never met the LI criterion.
-    if use_li:
-        all_ids = np.unique(
-            np.concatenate([arr.ravel() for arr in filtered_mcs_ids_list])
-        )
-        all_ids = all_ids[all_ids != 0]
-        main_mcs_ids_robust = [
-            apply_robust_mask(arr, robust_flag_dict) for arr in filtered_mcs_ids_list
-        ]
-    else:
-        main_mcs_ids_robust = filtered_mcs_ids_list
+    # --- Generate the 3 Final Output Variables ---
 
-    logger.info(f"Tracking finished. {len(main_mcs_ids)} main MCSs found.")
+    # Output 3 (Most Inclusive): Full "Family Tree"
+    mcs_id_merge_split = filter_relevant_systems(
+        mcs_ids_list, mcs_ids, merging_events, splitting_events
+    )
+
+    # Output 2 (Intermediate): Full Lifetime of Main MCSs
+    mcs_id = filter_main_mcs(mcs_ids_list, mcs_ids)
+
+    # Output 1 (Most Restrictive): "In-Phase" MCSs
+    robust_mcs_id = []
+    for i, mcs_id_array in enumerate(mcs_id):
+        frame_in_phase = mcs_id_array.copy()
+        unique_ids_in_frame = np.unique(frame_in_phase[frame_in_phase > 0])
+
+        for tid in unique_ids_in_frame:
+            area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
+
+            # Get the convective status for this track at this timestep
+            is_convective_this_step = (
+                convective_history[tid].get(i, False) if use_li else True
+            )
+
+            # A track is "in-phase" ONLY if it's both large enough AND convective
+            if area < main_area_thresh or not is_convective_this_step:
+                frame_in_phase[frame_in_phase == tid] = 0
+        robust_mcs_id.append(frame_in_phase)
+
+    # Final return statement
     return (
-        main_mcs_ids_robust,
-        filtered_mcs_ids_list,
-        main_mcs_ids,
+        robust_mcs_id,
+        mcs_id,
+        mcs_id_merge_split,
         lifetime_list,
         time_list,
         lat,

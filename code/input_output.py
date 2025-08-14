@@ -340,9 +340,9 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     output_filepath = os.path.join(structured_dir, filename)
 
     # Unpack the data for this timestep
-    robust_mcs_id = np.expand_dims(tracking_data_for_timestep["robust_mcs_id"], axis=0)
-    mcs_id = np.expand_dims(tracking_data_for_timestep["mcs_id"], axis=0)
-    main_mcs_id = np.expand_dims(tracking_data_for_timestep["main_mcs_id"], axis=0)
+    robust_mcs_id_arr = np.expand_dims(tracking_data_for_timestep["robust_mcs_id"], axis=0)
+    mcs_id_arr = np.expand_dims(tracking_data_for_timestep["mcs_id"], axis=0)
+    mcs_id_merge_split_arr = np.expand_dims(tracking_data_for_timestep["mcs_id_merge_split"], axis=0)
     lifetime = np.expand_dims(tracking_data_for_timestep["lifetime"], axis=0)
     lat = tracking_data_for_timestep["lat"]
     lon = tracking_data_for_timestep["lon"]
@@ -351,9 +351,9 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     # Create an xarray Dataset
     ds = xr.Dataset(
         {
-            "robust_mcs_id": (["time", "y", "x"], robust_mcs_id),
-            "mcs_id": (["time", "y", "x"], mcs_id),
-            "main_mcs_id": (["time", "y", "x"], main_mcs_id),
+            "robust_mcs_id": (["time", "y", "x"], robust_mcs_id_arr),
+            "mcs_id": (["time", "y", "x"], mcs_id_arr),
+            "mcs_id_merge_split": (["time", "y", "x"], mcs_id_merge_split_arr),
             "lifetime": (["time", "y", "x"], lifetime),
         },
         coords={
@@ -366,6 +366,12 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     # Attach lat/lon and metadata
     ds["lat"] = (("y", "x"), lat)
     ds["lon"] = (("y", "x"), lon)
+
+    # Set descriptive attributes for each variable
+    ds["robust_mcs_id"].attrs["description"] = "Track IDs of main MCSs, but only for timesteps where the system's area is >= main_area_thresh."
+    ds["mcs_id"].attrs["description"] = "Track IDs showing the full lifetime of all identified main MCSs."
+    ds["mcs_id_merge_split"].attrs["description"] = "Track IDs for the 'full family tree': main MCSs plus all systems that merged into or split from them."
+    ds["lifetime"].attrs["description"] = "Pixel-wise lifetime of all tracked clusters (in timesteps)."
 
     # Set global attributes
     ds.attrs["title"] = "MCS Tracking Results"
