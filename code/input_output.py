@@ -265,9 +265,15 @@ def save_single_detection_result(detection_result, output_dir, data_source):
     """
     # Extract the timestamp and format it for the filename
     time_val = pd.to_datetime(detection_result["time"]).round("S")
-    filename = f"detection_{time_val.strftime('%Y%m%dT%H%M')}.nc"
+    
+    # Create the year/month subdirectory structure
+    year_str = time_val.strftime('%Y')
+    month_str = time_val.strftime('%m')
+    structured_dir = os.path.join(output_dir, year_str, month_str)
+    os.makedirs(structured_dir, exist_ok=True)
 
-    output_filepath = os.path.join(output_dir, filename)
+    filename = f"detection_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
+    output_filepath = os.path.join(structured_dir, filename)
 
     # Prepare data arrays
     final_labeled_regions = np.expand_dims(
