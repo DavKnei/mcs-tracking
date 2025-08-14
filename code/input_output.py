@@ -247,6 +247,63 @@ def save_detection_results(detection_results, output_filepath, data_source):
     ds.to_netcdf(output_filepath)
     print(f"Detection results saved to {output_filepath}")
 
+def save_single_detection_result(detection_result, output_dir, data_source):
+    """Saves a single timestep's detection results to a dedicated NetCDF file.
+
+    The output filename is generated from the result's timestamp.
+
+    Args:
+        detection_result (dict):
+            A dictionary containing the detection results for one timestep.
+            Must contain: "final_labeled_regions", "lifting_index_regions", "lat", "lon", "time",
+            and optionally "center_points".
+        output_dir (str):
+            The directory where the output NetCDF file will be saved.
+        data_source (str):
+            Name of the original data source for the file's metadata.
+    """
+    # Extract the timestamp and format it for the filename
+    time_val = pd.to_datetime(detection_result["time"]).round("S")
+    filename = f"detection_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
+    output_filepath = os.path.join(output_dir, filename)
+
+    # Prepare data arrays
+    final_labeled_regions = np.expand_dims(detection_result["final_labeled_regions"], axis=0)
+    lifting_index_regions = np.expand_dims(detection_result["lifting_index_regions"], axis=0)
+    lat = detection_result["lat"]
+    lon = detection_result["lon"]
+
+    # Create an xarray Dataset
+    ds = xr.Dataset(
+        {
+            "final_labeled_regions": (["time", "y", "x"], final_labeled_regions),
+            "lifting_index_regions": (["time", "y", "x"], lifting_index_regions),
+        },
+        coords={
+            "time": [time_val],
+            "y": np.arange(final_labeled_regions.shape[1]),
+            "x": np.arange(final_labeled_regions.shape[2]),
+        },
+        attrs={
+            "description": "Detection results of MCSs for a single timestep.",
+            "source": data_source,
+        },
+    )
+
+    # Add lat/lon as DataArray variables
+    ds["lat"] = (("y", "x"), lat)
+    ds["lon"] = (("y", "x"), lon)
+
+    # Handle center points if they exist
+    center_points = detection_result.get("center_points", {})
+    center_points_str = serialize_center_points(center_points)
+    center_points_json = json.dumps(center_points_str)
+    ds["final_labeled_regions"].attrs["center_points_t0"] = center_points_json
+
+    # Save to NetCDF file
+    ds.to_netcdf(output_filepath)
+    # Using print instead of logger here as this might be called from a parallel process
+    print(f"Single detection result saved to {output_filepath}")
 
 def load_detection_results(input_filepath, USE_LIFTING_INDEX):
     """
