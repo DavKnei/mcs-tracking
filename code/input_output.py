@@ -573,3 +573,64 @@ def save_tracking_results_to_netcdf(
     output_filepath = os.path.join(output_dir, "mcs_tracking_results.nc")
     ds.to_netcdf(output_filepath)
     print(f"Saved tracking results to {output_filepath}")
+
+def save_single_tracking_result(tracking_data_for_timestep, output_dir, data_source):
+    """Saves a single timestep's tracking results to a NetCDF file
+    in a YYYY/MM/tracking/ subdirectory."""
+    
+    time_val = pd.to_datetime(tracking_data_for_timestep["time"]).round("S")
+
+    # Create the year/month subdirectory structure
+    year_str = time_val.strftime('%Y')
+    month_str = time_val.strftime('%m')
+    structured_dir = os.path.join(output_dir, year_str, month_str, 'tracking')
+    os.makedirs(structured_dir, exist_ok=True)
+
+    filename = f"tracking_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
+    output_filepath = os.path.join(structured_dir, filename)
+    
+    # Unpack the data for this timestep
+    robust_mcs_id = np.expand_dims(tracking_data_for_timestep["robust_mcs_id"], axis=0)
+    mcs_id = np.expand_dims(tracking_data_for_timestep["mcs_id"], axis=0)
+    main_mcs_id = np.expand_dims(tracking_data_for_timestep["main_mcs_id"], axis=0)
+    lifetime = np.expand_dims(tracking_data_for_timestep["lifetime"], axis=0)
+    lat = tracking_data_for_timestep["lat"]
+    lon = tracking_data_for_timestep["lon"]
+    tracking_centers = tracking_data_for_timestep["tracking_centers"]
+    
+    # Create an xarray Dataset
+    ds = xr.Dataset(
+        {
+            "robust_mcs_id": (["time", "y", "x"], robust_mcs_id),
+            "mcs_id": (["time", "y", "x"], mcs_id),
+            "main_mcs_id": (["time", "y", "x"], main_mcs_id),
+            "lifetime": (["time", "y", "x"], lifetime),
+        },
+        coords={
+            "time": [time_val],
+            "y": np.arange(lat.shape[0]),
+            "x": np.arange(lat.shape[1]),
+        },
+    )
+
+    # Attach lat/lon and metadata
+    ds["lat"] = (("y", "x"), lat)
+    ds["lon"] = (("y", "x"), lon)
+
+    # Set global attributes
+    ds.attrs["title"] = "MCS Tracking Results"
+    ds.attrs[
+        "institution"
+    ] = "Wegener Center for Global and Climate Change / University of Graz"
+    ds.attrs["source"] = data_source
+    ds.attrs["history"] = f"Created on {datetime.datetime.now()}"
+    ds.attrs["references"] = "David Kneidinger <david.kneidinger@uni-graz.at>"
+
+    # Store center points in a JSON attribute
+    centers_serialized = serialize_center_points(tracking_centers)
+    centers_json = json.dumps(centers_serialized)
+    ds["mcs_id"].attrs["center_points"] = centers_json
+
+    # Save the NetCDF file
+    ds.to_netcdf(output_filepath)
+    print(f"Single tracking result saved to {output_filepath}")
