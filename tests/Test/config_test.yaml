@@ -31,5 +31,5 @@ nmaxmerge: 5
 # Other parameters
 use_lifting_index: True
 detection: True
-use_multiprocessing: False
+use_multiprocessing: True
 number_of_cores: 24
