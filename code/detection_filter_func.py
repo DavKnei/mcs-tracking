@@ -1,10 +1,8 @@
 import numpy as np
 
-import numpy as np
-
 
 def lifting_index_filter(
-    lifting_index_array, labeled_regions, lifting_index_threshold=-2, percentage=0.5
+    lifting_index_array, labeled_regions, percentage, lifting_index_threshold=-2
 ):
     """
     Checks each cluster in labeled_regions and returns a binary array where each grid point
@@ -13,8 +11,9 @@ def lifting_index_filter(
     Parameters:
       lifting_index_array (numpy.ndarray): 2D float array containing the lifting index with the same shape as labeled_regions.
       labeled_regions (numpy.ndarray): 2D integer array of cluster labels (0 is background).
-      lifting_index_threshold (float): Threshold value for LI (default -2 K; lower values indicate instability).
       percentage (float): Fraction of grid points in a cluster that must have LI below the threshold (default 0.5).
+      lifting_index_threshold (float): Threshold value for LI (default -2 K; lower values indicate instability).
+      
 
     Returns:
       final_labeled_regions (numpy.ndarray): 2D binary array (same shape as labeled_regions) with 1 on grid points where
