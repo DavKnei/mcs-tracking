@@ -20,7 +20,7 @@ min_size_threshold: 10
 heavy_precip_threshold: 10.0
 moderate_precip_threshold: 1.0
 min_nr_plumes: 1
-
+lifting_index_percentage_threshold: 0.2
 
 # Tracking parameters
 main_lifetime_thresh: 6

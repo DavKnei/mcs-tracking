@@ -36,6 +36,7 @@ def process_file(
     moderate_precip_threshold,
     min_size_threshold,
     min_nr_plumes,
+    lifting_index_percentage,
     grid_spacing_km,
 ):
     """
@@ -53,6 +54,7 @@ def process_file(
         moderate_precip_threshold,
         min_size_threshold,
         min_nr_plumes,
+        lifting_index_percentage,
         grid_spacing_km,
     )
     return result
@@ -137,6 +139,7 @@ def main():
     heavy_precip_threshold = config["heavy_precip_threshold"]
     moderate_precip_threshold = config["moderate_precip_threshold"]
     min_nr_plumes = config["min_nr_plumes"]
+    lifting_index_percentage = config["lifting_index_percentage_threshold"]
 
     # Tracking parameters
     main_lifetime_thresh = config["main_lifetime_thresh"]
@@ -213,6 +216,7 @@ def main():
                             moderate_precip_threshold,
                             min_size_threshold,
                             min_nr_plumes,
+                            lifting_index_percentage,
                             grid_spacing_km,
                         )
                         for precip_file, li_file in zip(
@@ -240,6 +244,7 @@ def main():
                         moderate_precip_threshold,
                         min_size_threshold,
                         min_nr_plumes,
+                        lifting_index_percentage,
                         grid_spacing_km,
                     )
                     save_detection_result(
@@ -263,48 +268,34 @@ def main():
         # --- 3c. TRACKING PHASE ---
         logger.info(f"Starting tracking for year {year}...")
         (
-            robust_mcs_ids_list,
-            mcs_ids_list,
-            main_mcs_ids,
+            robust_mcs_id,          
+            mcs_id,            
+            mcs_id_merge_split,
             lifetime_list,
-            time_list,
-            lat,
-            lon,
-            merging_events,
-            splitting_events,
-            tracking_centers_list,
+            time_list, lat, lon, merging_events, splitting_events, tracking_centers_list
         ) = track_mcs(
-            detection_results,
-            main_lifetime_thresh,
-            main_area_thresh,
-            grid_cell_area_km2,
-            nmaxmerge,
-            use_li_filter=USE_LIFTING_INDEX,
+            detection_results, main_lifetime_thresh, main_area_thresh,
+            grid_cell_area_km2, nmaxmerge, use_li_filter=USE_LIFTING_INDEX
         )
         logger.info(f"Tracking for year {year} finished.")
 
-        # Filter results to only include main MCSs and their components
-        main_mcs_ids_list = filter_main_mcs(mcs_ids_list, main_mcs_ids)
-        robust_mcs_ids_list_filtered = filter_main_mcs(
-            robust_mcs_ids_list, main_mcs_ids
-        )
 
         # --- 3d. SAVING TRACKING PHASE ---
         logger.info(f"Saving individual hourly tracking files for year {year}...")
         for i in range(len(time_list)):
+            # Package all data for this single timestep into a dictionary
             tracking_data_for_timestep = {
-                "robust_mcs_id": robust_mcs_ids_list_filtered[i],
-                "mcs_id": mcs_ids_list[i],
-                "main_mcs_id": main_mcs_ids_list[i],
+                "robust_mcs_id": robust_mcs_id[i],         
+                "mcs_id": mcs_id[i],           
+                "mcs_id_merge_split": mcs_id_merge_split[i], 
                 "lifetime": lifetime_list[i],
                 "time": time_list[i],
                 "lat": lat,
                 "lon": lon,
                 "tracking_centers": tracking_centers_list[i],
             }
-            save_tracking_result(
-                tracking_data_for_timestep, tracking_output_dir, data_source
-            )
+            save_tracking_result(tracking_data_for_timestep, tracking_output_dir, data_source)
+
 
         logger.info(f"--- Finished processing for year: {year} ---")
 
