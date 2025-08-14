@@ -2,6 +2,7 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 import os
+import glob
 import datetime
 import json
 
@@ -102,7 +103,7 @@ def load_precipitation_data(file_path, data_var, lat_name, lon_name, time_index=
         lon, lat = np.meshgrid(longitude, latitude)
     else:
         lat, lon = latitude, longitude
-
+   
     prec = ds[str(data_var)]
     return ds, lat, lon, prec
 
@@ -261,7 +262,7 @@ def save_single_detection_result(detection_result, output_dir, data_source):
         output_dir (str):
             The directory where the output NetCDF file will be saved.
         data_source (str):
-            Name of the original data source for the file's metadata.
+            Name of the original data source for the file's metadata.save_sin
     """
     # Extract the timestamp and format it for the filename
     time_val = pd.to_datetime(detection_result["time"]).round("S")
@@ -312,10 +313,91 @@ def save_single_detection_result(detection_result, output_dir, data_source):
     center_points_json = json.dumps(center_points_str)
     ds["final_labeled_regions"].attrs["center_points_t0"] = center_points_json
 
+    # Set global attributes
+    ds.attrs["title"] = "MCS Tracking Results"
+    ds.attrs[
+        "institution"
+    ] = "Wegener Center for Global and Climate Change / University of Graz"
+    ds.attrs["source"] = data_source
+    ds.attrs["history"] = f"Created on {datetime.datetime.now()}"
+    ds.attrs["references"] = "David Kneidinger <david.kneidinger@uni-graz.at>"
+
     # Save to NetCDF file
     ds.to_netcdf(output_filepath)
     # Using print instead of logger here as this might be called from a parallel process
-    print(f"Single detection result saved to {output_filepath}")
+    print(f"Detection result saved to {output_filepath}")
+
+def load_individual_detection_files(year_input_dir, use_li_filter):
+    """
+    Load a sequence of individual detection result NetCDF files from a directory,
+    searching recursively through its subdirectories (e.g., monthly folders).
+
+    Args:
+        year_input_dir (str): The base directory for a specific year (e.g., /path/to/output/2020).
+        use_li_filter (bool): Flag to determine if lifting_index_regions should be loaded.
+
+    Returns:
+        List[dict]: A list of detection_result dictionaries, sorted by time.
+                    Returns an empty list if no files are found.
+    """
+    detection_results = []
+    
+    # --- CHANGE IS HERE ---
+    # Create a recursive glob pattern to find files in YYYY/MM/detection/*.nc
+    # The "**" wildcard searches through all subdirectories.
+    file_pattern = os.path.join(year_input_dir, "**", "detection_*.nc")
+    filepaths = sorted(glob.glob(file_pattern, recursive=True))
+    # --- END OF CHANGE ---
+
+    if not filepaths:
+        # This warning now reflects the pattern being searched
+        print(f"Warning: No detection files found matching pattern {file_pattern}")
+        return []
+
+    for filepath in filepaths:
+        try:
+            with xr.open_dataset(filepath) as ds:
+                # Reconstruct the detection_result dictionary from the file
+                time_val = ds["time"].values[0]
+                final_labeled_regions = ds["final_labeled_regions"].values[0]
+                lat = ds["lat"].values
+                lon = ds["lon"].values
+
+                center_points_dict = {}
+                if "center_points_t0" in ds["final_labeled_regions"].attrs:
+                    center_points_json = ds["final_labeled_regions"].attrs["center_points_t0"]
+                    try:
+                        center_points_intermediate = json.loads(center_points_json)
+                        center_points_dict = json.loads(center_points_intermediate) if isinstance(center_points_intermediate, str) else center_points_intermediate
+                    except json.JSONDecodeError:
+                        center_points_dict = {}
+
+                detection_result = {
+                    "final_labeled_regions": final_labeled_regions,
+                    "time": time_val,
+                    "lat": lat,
+                    "lon": lon,
+                    "center_points": center_points_dict,
+                }
+                
+                if use_li_filter:
+                    if "lifting_index_regions" in ds:
+                        detection_result["lifting_index_regions"] = ds["lifting_index_regions"].values[0]
+                    else:
+                        detection_result["lifting_index_regions"] = np.zeros_like(final_labeled_regions)
+                        print(f"Warning: 'lifting_index_regions' not found in {filepath}. Using zeros.")
+
+                detection_results.append(detection_result)
+
+        except Exception as e:
+            print(f"Error loading {filepath}: {e}")
+            continue
+    
+    # Final sort by time is robust, though sorting by filename often suffices
+    detection_results.sort(key=lambda x: x["time"])
+    
+    print(f"Loaded {len(detection_results)} individual detection files from {year_input_dir}")
+    return detection_results
 
 
 def load_detection_results(input_filepath, USE_LIFTING_INDEX):
@@ -583,7 +665,7 @@ def save_single_tracking_result(tracking_data_for_timestep, output_dir, data_sou
     # Create the year/month subdirectory structure
     year_str = time_val.strftime('%Y')
     month_str = time_val.strftime('%m')
-    structured_dir = os.path.join(output_dir, year_str, month_str, 'tracking')
+    structured_dir = os.path.join(output_dir, year_str, month_str)
     os.makedirs(structured_dir, exist_ok=True)
 
     filename = f"tracking_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
@@ -633,4 +715,4 @@ def save_single_tracking_result(tracking_data_for_timestep, output_dir, data_sou
 
     # Save the NetCDF file
     ds.to_netcdf(output_filepath)
-    print(f"Single tracking result saved to {output_filepath}")
+    print(f"Tracking result saved to {output_filepath}")
