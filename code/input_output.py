@@ -247,6 +247,7 @@ def save_detection_results(detection_results, output_filepath, data_source):
     ds.to_netcdf(output_filepath)
     print(f"Detection results saved to {output_filepath}")
 
+
 def save_single_detection_result(detection_result, output_dir, data_source):
     """Saves a single timestep's detection results to a dedicated NetCDF file.
 
@@ -264,12 +265,17 @@ def save_single_detection_result(detection_result, output_dir, data_source):
     """
     # Extract the timestamp and format it for the filename
     time_val = pd.to_datetime(detection_result["time"]).round("S")
-    filename = f"detection_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
+    filename = f"detection_{time_val.strftime('%Y%m%dT%H%M')}.nc"
+
     output_filepath = os.path.join(output_dir, filename)
 
     # Prepare data arrays
-    final_labeled_regions = np.expand_dims(detection_result["final_labeled_regions"], axis=0)
-    lifting_index_regions = np.expand_dims(detection_result["lifting_index_regions"], axis=0)
+    final_labeled_regions = np.expand_dims(
+        detection_result["final_labeled_regions"], axis=0
+    )
+    lifting_index_regions = np.expand_dims(
+        detection_result["lifting_index_regions"], axis=0
+    )
     lat = detection_result["lat"]
     lon = detection_result["lon"]
 
@@ -304,6 +310,7 @@ def save_single_detection_result(detection_result, output_dir, data_source):
     ds.to_netcdf(output_filepath)
     # Using print instead of logger here as this might be called from a parallel process
     print(f"Single detection result saved to {output_filepath}")
+
 
 def load_detection_results(input_filepath, USE_LIFTING_INDEX):
     """
