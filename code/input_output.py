@@ -160,7 +160,7 @@ def serialize_center_points(center_points):
     return json.dumps(casted_dict)
 
 
-def save_single_detection_result(detection_result, output_dir, data_source):
+def save_detection_result(detection_result, output_dir, data_source):
     """Saves a single timestep's detection results to a dedicated NetCDF file.
 
     The output filename is generated from the result's timestamp.
@@ -254,12 +254,10 @@ def load_individual_detection_files(year_input_dir, use_li_filter):
     """
     detection_results = []
 
-    # --- CHANGE IS HERE ---
     # Create a recursive glob pattern to find files in YYYY/MM/detection/*.nc
     # The "**" wildcard searches through all subdirectories.
     file_pattern = os.path.join(year_input_dir, "**", "detection_*.nc")
     filepaths = sorted(glob.glob(file_pattern, recursive=True))
-    # --- END OF CHANGE ---
 
     if not filepaths:
         # This warning now reflects the pattern being searched
@@ -326,7 +324,7 @@ def load_individual_detection_files(year_input_dir, use_li_filter):
     return detection_results
 
 
-def save_single_tracking_result(tracking_data_for_timestep, output_dir, data_source):
+def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     """Saves a single timestep's tracking results to a NetCDF file
     in a YYYY/MM/tracking/ subdirectory."""
 

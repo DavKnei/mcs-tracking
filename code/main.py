@@ -15,9 +15,9 @@ from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
 from tracking_filter_func import filter_main_mcs
 from input_output import (
-    save_single_detection_result,
+    save_detection_result,
     load_individual_detection_files,
-    save_single_tracking_result,
+    save_tracking_result,
 )
 from logging_setup import setup_logging, handle_exception
 
@@ -76,7 +76,7 @@ def group_files_by_year(file_list):
     """
     files_by_year = defaultdict(list)
     # This regex looks for a sequence of 8 digits (YYYYMMDD)
-    date_pattern = re.compile(r'(\d{8})')
+    date_pattern = re.compile(r"(\d{8})")
 
     for f in file_list:
         basename = os.path.basename(f)
@@ -86,15 +86,18 @@ def group_files_by_year(file_list):
             date_str = match.group(1)
             try:
                 # Convert the extracted 8-digit string to a datetime object
-                year = pd.to_datetime(date_str, format='%Y%m%d').year
+                year = pd.to_datetime(date_str, format="%Y%m%d").year
                 files_by_year[year].append(f)
             except ValueError:
-                logging.warning(f"Found potential date '{date_str}' in '{basename}', but it's not a valid date. Skipping.")
+                logging.warning(
+                    f"Found potential date '{date_str}' in '{basename}', but it's not a valid date. Skipping."
+                )
         else:
-            logging.warning(f"Could not parse YYYYMMDD date from filename: {basename}. Skipping.")
-            
-    return files_by_year
+            logging.warning(
+                f"Could not parse YYYYMMDD date from filename: {basename}. Skipping."
+            )
 
+    return files_by_year
 
 
 def main():
@@ -154,16 +157,20 @@ def main():
     logger.info("Configuration loaded and logging initialized.")
 
     # --- 2. GROUP INPUT FILES BY YEAR ---
-    all_precip_files = sorted(glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}")))
+    all_precip_files = sorted(
+        glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}"))
+    )
     if not all_precip_files:
         raise FileNotFoundError("Precipitation data directory is empty. Exiting.")
-    
+
     files_by_year = group_files_by_year(all_precip_files)
-    
+
     if USE_LIFTING_INDEX:
         lifting_index_data_dir = config["lifting_index_data_directory"]
         lifting_index_data_var = config["liting_index_var_name"]
-        all_li_files = sorted(glob.glob(os.path.join(lifting_index_data_dir, f"*{file_suffix}")))
+        all_li_files = sorted(
+            glob.glob(os.path.join(lifting_index_data_dir, f"*{file_suffix}"))
+        )
         if not all_li_files:
             raise FileNotFoundError("Lifting index data directory is empty. Exiting.")
         li_files_by_year = group_files_by_year(all_li_files)
@@ -172,11 +179,13 @@ def main():
     for year in sorted(files_by_year.keys()):
         logger.info(f"--- Starting processing for year: {year} ---")
         precip_file_list_year = files_by_year[year]
-        
+
         if USE_LIFTING_INDEX:
             li_files_year = li_files_by_year.get(year, [])
             if len(precip_file_list_year) != len(li_files_year):
-                logger.warning(f"Mismatch in file counts for {year}. Precip: {len(precip_file_list_year)}, LI: {len(li_files_year)}. Skipping year.")
+                logger.warning(
+                    f"Mismatch in file counts for {year}. Precip: {len(precip_file_list_year)}, LI: {len(li_files_year)}. Skipping year."
+                )
                 continue
         else:
             li_files_year = [None] * len(precip_file_list_year)
@@ -184,57 +193,101 @@ def main():
 
         # --- 3a. DETECTION PHASE ---
         if DO_DETECTION:
-            logger.info(f"Running detection for {len(precip_file_list_year)} files in {year}...")
+            logger.info(
+                f"Running detection for {len(precip_file_list_year)} files in {year}..."
+            )
             if USE_MULTIPROCESSING:
-                with concurrent.futures.ProcessPoolExecutor(max_workers=NUMBER_OF_CORES) as executor:
+                with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=NUMBER_OF_CORES
+                ) as executor:
                     futures = [
                         executor.submit(
                             process_file,
-                            precip_file, precip_data_var, li_file, lifting_index_data_var,
-                            lat_name, lon_name, heavy_precip_threshold, moderate_precip_threshold,
-                            min_size_threshold, min_nr_plumes, grid_spacing_km
+                            precip_file,
+                            precip_data_var,
+                            li_file,
+                            lifting_index_data_var,
+                            lat_name,
+                            lon_name,
+                            heavy_precip_threshold,
+                            moderate_precip_threshold,
+                            min_size_threshold,
+                            min_nr_plumes,
+                            grid_spacing_km,
                         )
-                        for precip_file, li_file in zip(precip_file_list_year, li_files_year)
+                        for precip_file, li_file in zip(
+                            precip_file_list_year, li_files_year
+                        )
                     ]
                     for future in concurrent.futures.as_completed(futures):
                         try:
                             detection_result = future.result()
-                            save_single_detection_result(detection_result, detection_output_path, data_source)
+                            save_detection_result(
+                                detection_result, detection_output_path, data_source
+                            )
                         except Exception as e:
                             logger.error(f"A detection task failed: {e}")
             else:
                 for precip_file, li_file in zip(precip_file_list_year, li_files_year):
                     detection_result = detect_mcs_in_file(
-                        precip_file, precip_data_var, li_file, lifting_index_data_var,
-                        lat_name, lon_name, heavy_precip_threshold, moderate_precip_threshold,
-                        min_size_threshold, min_nr_plumes, grid_spacing_km
+                        precip_file,
+                        precip_data_var,
+                        li_file,
+                        lifting_index_data_var,
+                        lat_name,
+                        lon_name,
+                        heavy_precip_threshold,
+                        moderate_precip_threshold,
+                        min_size_threshold,
+                        min_nr_plumes,
+                        grid_spacing_km,
                     )
-                    save_single_detection_result(detection_result, detection_output_path, data_source)
+                    save_detection_result(
+                        detection_result, detection_output_path, data_source
+                    )
             logger.info(f"Detection for year {year} finished.")
 
         # --- 3b. LOADING PHASE ---
         logger.info(f"Loading all detection files for year {year}...")
         year_detection_dir = os.path.join(detection_output_path, str(year))
-        detection_results = load_individual_detection_files(year_detection_dir, USE_LIFTING_INDEX)
-        
+        detection_results = load_individual_detection_files(
+            year_detection_dir, USE_LIFTING_INDEX
+        )
+
         if not detection_results:
-            logger.warning(f"No detection results found for year {year}. Skipping tracking.")
+            logger.warning(
+                f"No detection results found for year {year}. Skipping tracking."
+            )
             continue
 
         # --- 3c. TRACKING PHASE ---
         logger.info(f"Starting tracking for year {year}...")
         (
-            robust_mcs_ids_list, mcs_ids_list, main_mcs_ids, lifetime_list,
-            time_list, lat, lon, merging_events, splitting_events, tracking_centers_list
+            robust_mcs_ids_list,
+            mcs_ids_list,
+            main_mcs_ids,
+            lifetime_list,
+            time_list,
+            lat,
+            lon,
+            merging_events,
+            splitting_events,
+            tracking_centers_list,
         ) = track_mcs(
-            detection_results, main_lifetime_thresh, main_area_thresh,
-            grid_cell_area_km2, nmaxmerge, use_li_filter=USE_LIFTING_INDEX
+            detection_results,
+            main_lifetime_thresh,
+            main_area_thresh,
+            grid_cell_area_km2,
+            nmaxmerge,
+            use_li_filter=USE_LIFTING_INDEX,
         )
         logger.info(f"Tracking for year {year} finished.")
 
         # Filter results to only include main MCSs and their components
         main_mcs_ids_list = filter_main_mcs(mcs_ids_list, main_mcs_ids)
-        robust_mcs_ids_list_filtered = filter_main_mcs(robust_mcs_ids_list, main_mcs_ids)
+        robust_mcs_ids_list_filtered = filter_main_mcs(
+            robust_mcs_ids_list, main_mcs_ids
+        )
 
         # --- 3d. SAVING TRACKING PHASE ---
         logger.info(f"Saving individual hourly tracking files for year {year}...")
@@ -249,8 +302,10 @@ def main():
                 "lon": lon,
                 "tracking_centers": tracking_centers_list[i],
             }
-            save_single_tracking_result(tracking_data_for_timestep, tracking_output_dir, data_source)
-        
+            save_tracking_result(
+                tracking_data_for_timestep, tracking_output_dir, data_source
+            )
+
         logger.info(f"--- Finished processing for year: {year} ---")
 
     logger.info("All processing completed successfully.")
