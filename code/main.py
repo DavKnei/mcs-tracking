@@ -11,8 +11,10 @@ from tracking_main import track_mcs
 from tracking_filter_func import filter_main_mcs
 from input_output import (
     save_detection_results,
+    save_single_detection_result,
     load_detection_results,
-    save_tracking_results_to_netcdf,
+    save_tracking_results_to_netcdf
+
 )
 from logging_setup import setup_logging, handle_exception
 
@@ -137,7 +139,7 @@ def main():
         lifting_index_data_var = None
 
     # List to hold detection results
-    detection_results = []
+    # detection_results = [] not needed anymore if we save in every timestep
 
     # Check if detection results file exists and is valid
     detection_results_exist = os.path.exists(detection_results_file)
@@ -186,7 +188,8 @@ def main():
                 ]
                 for future in concurrent.futures.as_completed(futures):
                     detection_result = future.result()
-                    detection_results.append(detection_result)
+                    # detection_results.append(detection_result)  
+                    save_single_detection_result(detection_result, detection_output_path, data_source)  # Instead of appending, save immediately.
         else:
             # Process files sequentially
             for precip_file_path, lifting_index_file_path in zip(
@@ -205,13 +208,17 @@ def main():
                     min_nr_plumes,
                     grid_spacing_km,
                 )
-                detection_results.append(detection_result)
+                #  detection_results.append(detection_result)
+
+                # Instead of appending, save immediately.
+                save_single_detection_result(detection_result, detection_output_path, data_source)
 
         # Sort detection results by time to ensure correct sequence
-        detection_results.sort(key=lambda x: x["time"])
+        # detection_results.sort(key=lambda x: x["time"])
         logger.info("Detection finished.")
         # Save detection results to NetCDF file
-        save_detection_results(detection_results, detection_results_file, data_source)
+        # save_detection_results(detection_results, detection_results_file, data_source)
+        return  # to stop the script after detection phase for now.
     else:
         # Detection results were loaded from file
         pass
