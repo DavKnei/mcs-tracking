@@ -5,8 +5,8 @@
 precip_data_directory: "./tests/Test/data/"
 lifting_index_data_directory: "./tests/Test/data/"
 file_suffix: ".nc_test"
-detection_output_path: "./tests/Test/"
-tracking_output_dir: "./tests/Test/"
+detection_output_path: "./tests/Test/output/detection"
+tracking_output_dir: "./tests/Test/output/tracking"
 
 grid_size_km: 4.0
 precip_var_name: "pr"
