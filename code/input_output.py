@@ -184,7 +184,7 @@ def save_detection_result(detection_result, output_dir, data_source):
     structured_dir = os.path.join(output_dir, year_str, month_str)
     os.makedirs(structured_dir, exist_ok=True)
 
-    filename = f"detection_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
+    filename = f"detection_{time_val.strftime('%Y%m%dT%H')}.nc"
     output_filepath = os.path.join(structured_dir, filename)
 
     # Prepare data arrays
@@ -336,7 +336,7 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     structured_dir = os.path.join(output_dir, year_str, month_str)
     os.makedirs(structured_dir, exist_ok=True)
 
-    filename = f"tracking_{time_val.strftime('%Y%m%dT%H%M%S')}.nc"
+    filename = f"tracking_{time_val.strftime('%Y%m%dT%H')}.nc"
     output_filepath = os.path.join(structured_dir, filename)
 
     # Unpack the data for this timestep
