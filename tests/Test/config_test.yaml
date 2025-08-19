@@ -15,6 +15,11 @@ lat_name: "lat"
 lon_name: "lon"
 data_source: "Test data"
 
+# Years and Months to process
+# empty list uses all available data in the specified directory
+years: []
+months: []
+
 # Detection parametersS
 min_size_threshold: 10
 heavy_precip_threshold: 10.0
