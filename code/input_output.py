@@ -132,7 +132,7 @@ def convert_lifting_index_units(li, target_unit="K"):
     Returns:
     - new_prec: DataArray with converted values and updated units attribute.
     """
-    orig_units = li.attrs.get("units", "").lower()
+    orig_units = li.attrs.get("units", "")
 
     if orig_units in ["K", "Kelvin"]:
         constant = 0
