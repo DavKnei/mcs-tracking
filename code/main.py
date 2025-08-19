@@ -9,12 +9,12 @@ import sys
 import re
 import logging
 import pandas as pd
-from collections import defaultdict
 
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
 from tracking_filter_func import filter_main_mcs
 from input_output import (
+    group_files_by_year,
     save_detection_result,
     load_individual_detection_files,
     save_tracking_result,
@@ -68,38 +68,6 @@ def parse_arguments():
     )
     return parser.parse_args()
 
-
-def group_files_by_year(file_list):
-    """
-    Groups a list of file paths into a dictionary keyed by year.
-
-    This function uses a regular expression to find a date in YYYYMMDD format
-    within the filename, making it robust to different naming conventions.
-    """
-    files_by_year = defaultdict(list)
-    # This regex looks for a sequence of 8 digits (YYYYMMDD)
-    date_pattern = re.compile(r"(\d{8})")
-
-    for f in file_list:
-        basename = os.path.basename(f)
-        match = date_pattern.search(basename)
-
-        if match:
-            date_str = match.group(1)
-            try:
-                # Convert the extracted 8-digit string to a datetime object
-                year = pd.to_datetime(date_str, format="%Y%m%d").year
-                files_by_year[year].append(f)
-            except ValueError:
-                logging.warning(
-                    f"Found potential date '{date_str}' in '{basename}', but it's not a valid date. Skipping."
-                )
-        else:
-            logging.warning(
-                f"Could not parse YYYYMMDD date from filename: {basename}. Skipping."
-            )
-
-    return files_by_year
 
 
 def main():
@@ -160,9 +128,11 @@ def main():
     logger.info("Configuration loaded and logging initialized.")
 
     # --- 2. GROUP INPUT FILES BY YEAR ---
+    # Use recursive glob to find files in subdirectories (e.g., YYYY/MM/)
     all_precip_files = sorted(
-        glob.glob(os.path.join(precip_data_dir, f"*{file_suffix}"))
+        glob.glob(os.path.join(precip_data_dir, '**', f"*{file_suffix}"), recursive=True)
     )
+    breakpoint()
     if not all_precip_files:
         raise FileNotFoundError("Precipitation data directory is empty. Exiting.")
 
@@ -172,7 +142,7 @@ def main():
         lifting_index_data_dir = config["lifting_index_data_directory"]
         lifting_index_data_var = config["liting_index_var_name"]
         all_li_files = sorted(
-            glob.glob(os.path.join(lifting_index_data_dir, f"*{file_suffix}"))
+            glob.glob(os.path.join(lifting_index_data_dir, '**', f"*{file_suffix}"), recursive=True)
         )
         if not all_li_files:
             raise FileNotFoundError("Lifting index data directory is empty. Exiting.")

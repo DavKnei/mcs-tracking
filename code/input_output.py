@@ -5,7 +5,87 @@ import os
 import glob
 import datetime
 import json
+import re
+import logging
+from collections import defaultdict
 
+def group_files_by_year(file_list):
+    """
+    Groups a list of file paths into a dictionary keyed by year.
+
+    This function uses a regular expression to find a date in YYYYMMDD format
+    within the filename, making it robust to different naming conventions.
+    """
+    files_by_year = defaultdict(list)
+    # This regex looks for a sequence of 8 digits (YYYYMMDD)
+    date_pattern = re.compile(r"(\d{8})")
+
+    for f in file_list:
+        basename = os.path.basename(f)
+        match = date_pattern.search(basename)
+
+        if match:
+            date_str = match.group(1)
+            try:
+                # Convert the extracted 8-digit string to a datetime object
+                year = pd.to_datetime(date_str, format="%Y%m%d").year
+                files_by_year[year].append(f)
+            except ValueError:
+                logging.warning(
+                    f"Found potential date '{date_str}' in '{basename}', but it's not a valid date. Skipping."
+                )
+        else:
+            logging.warning(
+                f"Could not parse YYYYMMDD date from filename: {basename}. Skipping."
+            )
+
+    return files_by_year
+
+def filter_files_by_date(file_list, years=None, months=None):
+    """
+    Filters a list of file paths based on specified years and/or months.
+
+    The function extracts a YYYYMMDD date from each filename to perform the
+    filtering. If `years` or `months` are empty or None, no filtering is
+    applied for that criterion.
+
+    Args:
+        file_list (list): The initial list of file paths.
+        years (list, optional): A list of integer years to include.
+        months (list, optional): A list of integer months to include.
+
+    Returns:
+        list: A new list containing only the filtered file paths.
+    """
+    # If both filter lists are empty/None, no filtering is needed.
+    if not years and not months:
+        return file_list
+
+    filtered_list = []
+    date_pattern = re.compile(r"(\d{8})")
+    logger = logging.getLogger(__name__)
+
+    for f in file_list:
+        basename = os.path.basename(f)
+        match = date_pattern.search(basename)
+
+        if match:
+            date_str = match.group(1)
+            try:
+                timestamp = pd.to_datetime(date_str, format="%Y%m%d")
+                
+                # A file is kept if its year/month is in the respective list,
+                # or if that list is empty (which means "accept all").
+                year_ok = not years or timestamp.year in years
+                month_ok = not months or timestamp.month in months
+
+                if year_ok and month_ok:
+                    filtered_list.append(f)
+            except ValueError:
+                logger.warning(
+                    f"Could not parse valid date from '{basename}'. Skipping file in filter."
+                )
+    return filtered_list
 
 def convert_precip_units(prec, target_unit="mm/h"):
     """
