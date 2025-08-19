@@ -132,7 +132,7 @@ def convert_lifting_index_units(li, target_unit="K"):
     Returns:
     - new_prec: DataArray with converted values and updated units attribute.
     """
-    orig_units = li.attrs.get("units", "")
+    orig_units = li.attrs.get("units", "").lower()
 
     if orig_units in ["K", "Kelvin"]:
         constant = 0
@@ -140,7 +140,7 @@ def convert_lifting_index_units(li, target_unit="K"):
         constant = 273.15
     else:
         print(
-            f"Warning: Unrecognized precipitation units '{orig_units}'. No conversion applied."
+            f"Warning: Unrecognized lifting_index units '{orig_units}'. No conversion applied."
         )
         factor = 1.0
 
@@ -181,7 +181,8 @@ def load_precipitation_data(file_path, data_var, lat_name, lon_name, time_index=
         lat, lon = latitude, longitude
 
     prec = ds[str(data_var)]
-    return ds, lat, lon, prec
+    prec_converted = convert_precip_units(prec)
+    return ds, lat, lon, prec_converted
 
 
 def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=0):
@@ -217,14 +218,14 @@ def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=
 
     li = ds[str(data_var)]
     # Convert the lifting index data to K using the separate conversion function.
-    li = convert_lifting_index_units(li, target_unit="K")
+    li_converted = convert_lifting_index_units(li, target_unit="K")
 
     # Remove all non relevant data variables from dataset
     data_vars_list = [data_var for data_var in ds.data_vars]
     data_vars_list.remove(data_var)
     ds = ds.drop_vars(data_vars_list)
 
-    return ds, lat, lon, li
+    return ds, lat, lon, li_converted
 
 
 def serialize_center_points(center_points):
