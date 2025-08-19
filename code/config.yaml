@@ -3,7 +3,7 @@
 
 # Data
 precip_data_directory: "/reloclim/dkn/data/IMERG_most_final"
-lifting_index_data_directory: "/reloclim/dkn/data/ERA5/lifting_index_old"
+lifting_index_data_directory: "/reloclim/dkn/data/ERA5/lifting_index"
 file_suffix: ".nc"
 detection_output_path: "/reloclim/dkn/data/detection_tracking_output/detection"
 tracking_output_dir: "/reloclim/dkn/data/detection_tracking_output/tracking"
@@ -17,8 +17,8 @@ data_source: "IMERG precipitation and ERA5 Lifting Index"
 
 # Years and Months to process
 # empty list uses all available data in the specified directory
-years: [2001]
-months: [5, 6, 7, 8, 9]
+years: [2000]
+months: [5]
 
 # Detection parametersS
 min_size_threshold: 10
@@ -35,6 +35,6 @@ nmaxmerge: 5
 
 # Other parameters
 use_lifting_index: True
-detection: True
+detection: False
 use_multiprocessing: True
 number_of_cores: 32

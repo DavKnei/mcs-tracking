@@ -92,7 +92,7 @@ def parse_arguments():
         help="Directory to store (or load from) the xesmf remapping weights file.",
     )
     parser.add_argument(
-        "--start_year", type=int, default=2001, help="The first year to process."
+        "--start_year", type=int, default=2000, help="The first year to process."
     )
     parser.add_argument(
         "--end_year", type=int, default=2020, help="The last year to process."
@@ -319,13 +319,14 @@ def main():
                 ds_hour = li_regridded.sel(time=slice(timestamp, timestamp))
                 ds_out = ds_hour.to_dataset(name="LI")
                 ds_out = ds_out.drop(['number', 'expver'])
-
+                
+                ds_out['LI'].attrs['units'] = 'K'
                 ds_out.attrs = {
                     "Title": "Remapped Lifted Index calculated from ERA5",
                     "Description": "Most unstable LI from 925, 850, and 700 hPa source parcels.",
                     "Source": "ERA5",
                     "Method": "Pucik et al. (2017), J. Climate",
-                    "Units": "K",
+                    "units": "K",
                     "Author": "David Kneidinger",
                     "Email": "<david.kneidinger@uni-graz.at>",
                 }
