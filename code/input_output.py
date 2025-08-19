@@ -6,8 +6,53 @@ import glob
 import datetime
 import json
 import re
+import sys
 import logging
 from collections import defaultdict
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    """
+    Global exception handler to log any uncaught exceptions.
+    This is assigned to sys.excepthook in main.py.
+    """
+    # Don't log KeyboardInterrupt (Ctrl+C) as a critical error
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logger = logging.getLogger(__name__)
+    logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+
+def setup_logging(output_dir, filename="mcs_tracking.log", mode="a"):
+    """
+    Configures logging. Removes old handlers to prevent duplicate messages.
+    """
+    log_filepath = os.path.join(output_dir, filename)
+    os.makedirs(os.path.dirname(log_filepath), exist_ok=True)
+
+    logger = logging.getLogger()  # Get the root logger
+    logger.setLevel(logging.INFO)
+
+    # Shut down and remove existing file handlers
+    for handler in logger.handlers[:]:
+        if isinstance(handler, logging.FileHandler):
+            handler.close()
+            logger.removeHandler(handler)
+
+    # Add the new file handler
+    file_handler = logging.FileHandler(log_filepath, mode=mode)
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Ensure console output is still active
+    if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
 
 def group_files_by_year(file_list):

@@ -12,13 +12,14 @@ import pandas as pd
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
 from input_output import (
+    setup_logging,
+    handle_exception,
     filter_files_by_date,
     group_files_by_year,
     save_detection_result,
     load_individual_detection_files,
     save_tracking_result,
 )
-from logging_setup import setup_logging, handle_exception
 
 # Set a global exception handler to log uncaught exceptions
 sys.excepthook = handle_exception
@@ -126,8 +127,16 @@ def main():
     # Setup logging and create output directories
     os.makedirs(detection_output_path, exist_ok=True)
     os.makedirs(tracking_output_dir, exist_ok=True)
-    setup_logging(detection_output_path)
-    logger.info("Configuration loaded and logging initialized.")
+
+    if DO_DETECTION:
+        # Start with a fresh detection log, overwriting any from a previous run.
+        setup_logging(detection_output_path, filename="detection.log", mode='w')
+        logger.info("Logging initialized for DETECTION phase.")
+    else:
+        # If skipping detection, start directly with a fresh tracking log.
+        setup_logging(tracking_output_dir, filename="tracking.log", mode='w')
+        logger.info("Logging initialized for TRACKING phase.")
+
 
     # --- 2. FIND, FILTER, AND GROUP INPUT FILES ---
     # Find all files recursively
@@ -180,6 +189,8 @@ def main():
         li_files_by_year = group_files_by_year(filtered_li_files)
 
     # --- 3. MAIN YEARLY PROCESSING LOOP ---
+    logging_switched_to_tracking = False  # Flag to ensure we only switch once
+
     for year in sorted(files_by_year.keys()):
         logger.info(f"--- Starting processing for year: {year} ---")
         precip_file_list_year = files_by_year[year]
@@ -254,6 +265,14 @@ def main():
             logger.info(f"Detection for year {year} finished.")
             print(f"Detection for year {year} finished.")
 
+            if not logging_switched_to_tracking:
+                # Use mode 'w' to create a fresh tracking log
+                setup_logging(tracking_output_dir, filename="tracking.log", mode="w")
+                logger.info(
+                    "Log file switched to tracking phase for all subsequent years."
+                )
+                logging_switched_to_tracking = True
+
         # --- 3b. LOADING PHASE ---
         logger.info(f"Loading all detection files for year {year}...")
         year_detection_dir = os.path.join(detection_output_path, str(year))
@@ -265,10 +284,13 @@ def main():
         if months_to_process and detection_results:
             original_count = len(detection_results)
             detection_results = [
-                res for res in detection_results 
-                if pd.to_datetime(res['time']).month in months_to_process
+                res
+                for res in detection_results
+                if pd.to_datetime(res["time"]).month in months_to_process
             ]
-            logger.info(f"Filtered detection results for specified months. Kept {len(detection_results)} of {original_count} files.")
+            logger.info(
+                f"Filtered detection results for specified months. Kept {len(detection_results)} of {original_count} files."
+            )
 
         if not detection_results:
             logger.warning(
@@ -323,6 +345,7 @@ def main():
 
     logger.info("All processing completed successfully.")
     print("All processing completed successfully.")
+
 
 if __name__ == "__main__":
     main()

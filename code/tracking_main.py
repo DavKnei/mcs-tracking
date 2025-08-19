@@ -288,29 +288,46 @@ def track_mcs(
         tracking_centers_list.append(centers_this_timestep)
 
     # ---- Final Filtering Step ----
-    # A track is a "main MCS" if it has a continuous period of at least
-    # 'main_lifetime_thresh' where BOTH area and LI criteria are met.
+    logger.info("Starting efficient final filtering of tracks...")
 
+    # Pass 1: Pre-compute properties for all tracks at each timestep.
+    # This avoids repeatedly scanning the same arrays.
+    track_properties_by_time = defaultdict(dict)
+    for i, mcs_id_array in enumerate(mcs_ids_list):
+        # Find all unique track IDs present in this single timestep
+        unique_ids_in_frame = np.unique(mcs_id_array)
+        unique_ids_in_frame = unique_ids_in_frame[unique_ids_in_frame > 0]
+
+        for tid in unique_ids_in_frame:
+            # Calculate area once and store it
+            area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
+            
+            # Get convective status and store it
+            is_convective = convective_history[tid].get(i, False) if use_li else True
+            
+            # Store in our fast lookup dictionary
+            track_properties_by_time[tid][i] = {
+                "meets_area": area >= main_area_thresh,
+                "meets_li": is_convective,
+            }
+
+    # Pass 2: Use the pre-computed data to quickly build boolean series and find main MCSs.
     mcs_ids = []
     # Iterate through every track that ever existed
     for tid in list(lifetime_dict.keys()):
-
-        # For each track, create a boolean series indicating when it meets BOTH criteria
+        
+        # Build the boolean series using fast dictionary lookups
         bool_series_combined = []
-        for i, mcs_id_array in enumerate(mcs_ids_list):
-            area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
-            meets_area_criteria = area >= main_area_thresh
+        for i in range(len(mcs_ids_list)):
+            props = track_properties_by_time.get(tid, {}).get(i)
+            if props:
+                # If the track exists at this time, check its stored properties
+                bool_series_combined.append(props["meets_area"] and props["meets_li"])
+            else:
+                # If the track doesn't exist at this time, it fails the criteria
+                bool_series_combined.append(False)
 
-            # Check the convective history for this timestep
-            # If not using LI, all systems are considered convective
-            meets_li_criteria = (
-                convective_history[tid].get(i, False) if use_li else True
-            )
-
-            # Both must be true for the system to be in a robust state at this hour
-            bool_series_combined.append(meets_area_criteria and meets_li_criteria)
-
-        # Now, find the longest continuous period of this robust state
+        # The logic from here is identical, but it runs on the efficiently-built series
         if compute_max_consecutive(bool_series_combined) >= main_lifetime_thresh:
             mcs_ids.append(tid)
 
@@ -318,7 +335,7 @@ def track_mcs(
         f"Tracking identified {len(mcs_ids)} main MCSs after combined filtering."
     )
 
-    # --- Generate the 3 Final Output Variables ---
+    # --- Generate the 3 Final Output Variables (This part is already efficient) ---
 
     # Output 3 (Most Inclusive): Full "Family Tree"
     mcs_id_merge_split = filter_relevant_systems(
@@ -335,16 +352,11 @@ def track_mcs(
         unique_ids_in_frame = np.unique(frame_in_phase[frame_in_phase > 0])
 
         for tid in unique_ids_in_frame:
-            area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
-
-            # Get the convective status for this track at this timestep
-            is_convective_this_step = (
-                convective_history[tid].get(i, False) if use_li else True
-            )
-
-            # A track is "in-phase" ONLY if it's both large enough AND convective
-            if area < main_area_thresh or not is_convective_this_step:
+            # Use our pre-computed dictionary here as well for a small extra speedup
+            props = track_properties_by_time.get(tid, {}).get(i)
+            if not props or not (props["meets_area"] and props["meets_li"]):
                 frame_in_phase[frame_in_phase == tid] = 0
+                
         robust_mcs_id.append(frame_in_phase)
 
     # Final return statement
