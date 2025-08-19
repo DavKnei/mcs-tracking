@@ -312,8 +312,6 @@ def save_detection_result(detection_result, output_dir, data_source):
 
     # Save to NetCDF file
     ds.to_netcdf(output_filepath)
-    # Using print instead of logger here as this might be called from a parallel process
-    print(f"Detection result saved to {output_filepath}")
 
 
 def load_individual_detection_files(year_input_dir, use_li_filter):
@@ -395,9 +393,6 @@ def load_individual_detection_files(year_input_dir, use_li_filter):
     # Final sort by time is robust, though sorting by filename often suffices
     detection_results.sort(key=lambda x: x["time"])
 
-    print(
-        f"Loaded {len(detection_results)} individual detection files from {year_input_dir}"
-    )
     return detection_results
 
 
@@ -478,4 +473,3 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
 
     # Save the NetCDF file
     ds.to_netcdf(output_filepath)
-    print(f"Tracking result saved to {output_filepath}")
