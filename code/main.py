@@ -7,6 +7,7 @@ import argparse
 import yaml
 import sys
 import logging
+import pandas as pd
 
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
@@ -251,6 +252,7 @@ def main():
                         detection_result, detection_output_path, data_source
                     )
             logger.info(f"Detection for year {year} finished.")
+            print(f"Detection for year {year} finished.")
 
         # --- 3b. LOADING PHASE ---
         logger.info(f"Loading all detection files for year {year}...")
@@ -259,9 +261,18 @@ def main():
             year_detection_dir, USE_LIFTING_INDEX
         )
 
+        # --- Apply month filter if specified, especially for 'detection: False' runs ---
+        if months_to_process and detection_results:
+            original_count = len(detection_results)
+            detection_results = [
+                res for res in detection_results 
+                if pd.to_datetime(res['time']).month in months_to_process
+            ]
+            logger.info(f"Filtered detection results for specified months. Kept {len(detection_results)} of {original_count} files.")
+
         if not detection_results:
             logger.warning(
-                f"No detection results found for year {year}. Skipping tracking."
+                f"No detection results found for year {year} (or for the specified months). Skipping tracking."
             )
             continue
 
@@ -287,6 +298,7 @@ def main():
             use_li_filter=USE_LIFTING_INDEX,
         )
         logger.info(f"Tracking for year {year} finished.")
+        print("Tracking for year {year} finished.")
 
         # --- 3d. SAVING TRACKING PHASE ---
         logger.info(f"Saving individual hourly tracking files for year {year}...")
@@ -307,9 +319,10 @@ def main():
             )
 
         logger.info(f"--- Finished processing for year: {year} ---")
+        print(f"--- Finished processing for year: {year} ---")
 
     logger.info("All processing completed successfully.")
-
+    print("All processing completed successfully.")
 
 if __name__ == "__main__":
     main()
