@@ -6,14 +6,12 @@ import concurrent.futures
 import argparse
 import yaml
 import sys
-import re
 import logging
-import pandas as pd
 
 from detection_main import detect_mcs_in_file
 from tracking_main import track_mcs
-from tracking_filter_func import filter_main_mcs
 from input_output import (
+    filter_files_by_date,
     group_files_by_year,
     save_detection_result,
     load_individual_detection_files,
@@ -69,7 +67,6 @@ def parse_arguments():
     return parser.parse_args()
 
 
-
 def main():
     """
     Main execution script for MCS detection and tracking.
@@ -102,6 +99,10 @@ def main():
     lon_name = config["lon_name"]
     data_source = config["data_source"]
 
+    # Read optional date filtering parameters ---
+    years_to_process = config.get("years", [])
+    months_to_process = config.get("months", [])
+
     # Detection parameters
     min_size_threshold = config["min_size_threshold"]
     heavy_precip_threshold = config["heavy_precip_threshold"]
@@ -127,26 +128,55 @@ def main():
     setup_logging(detection_output_path)
     logger.info("Configuration loaded and logging initialized.")
 
-    # --- 2. GROUP INPUT FILES BY YEAR ---
-    # Use recursive glob to find files in subdirectories (e.g., YYYY/MM/)
+    # --- 2. FIND, FILTER, AND GROUP INPUT FILES ---
+    # Find all files recursively
     all_precip_files = sorted(
-        glob.glob(os.path.join(precip_data_dir, '**', f"*{file_suffix}"), recursive=True)
+        glob.glob(
+            os.path.join(precip_data_dir, "**", f"*{file_suffix}"), recursive=True
+        )
     )
-    breakpoint()
     if not all_precip_files:
         raise FileNotFoundError("Precipitation data directory is empty. Exiting.")
+    logger.info(
+        f"Found {len(all_precip_files)} total precipitation files in source directory."
+    )
 
-    files_by_year = group_files_by_year(all_precip_files)
+    # Apply the date filter
+    filtered_precip_files = filter_files_by_date(
+        all_precip_files, years_to_process, months_to_process
+    )
+    logger.info(
+        f"After filtering by year/month, {len(filtered_precip_files)} files remain for processing."
+    )
+
+    # Now, group the filtered list by year
+    files_by_year = group_files_by_year(filtered_precip_files)
 
     if USE_LIFTING_INDEX:
         lifting_index_data_dir = config["lifting_index_data_directory"]
         lifting_index_data_var = config["liting_index_var_name"]
+
         all_li_files = sorted(
-            glob.glob(os.path.join(lifting_index_data_dir, '**', f"*{file_suffix}"), recursive=True)
+            glob.glob(
+                os.path.join(lifting_index_data_dir, "**", f"*{file_suffix}"),
+                recursive=True,
+            )
         )
         if not all_li_files:
             raise FileNotFoundError("Lifting index data directory is empty. Exiting.")
-        li_files_by_year = group_files_by_year(all_li_files)
+        logger.info(
+            f"Found {len(all_li_files)} total lifting index files in source directory."
+        )
+
+        # Apply the same filter to the lifting index files
+        filtered_li_files = filter_files_by_date(
+            all_li_files, years_to_process, months_to_process
+        )
+        logger.info(
+            f"After filtering, {len(filtered_li_files)} lifting index files remain."
+        )
+
+        li_files_by_year = group_files_by_year(filtered_li_files)
 
     # --- 3. MAIN YEARLY PROCESSING LOOP ---
     for year in sorted(files_by_year.keys()):
@@ -238,34 +268,43 @@ def main():
         # --- 3c. TRACKING PHASE ---
         logger.info(f"Starting tracking for year {year}...")
         (
-            robust_mcs_id,          
-            mcs_id,            
+            robust_mcs_id,
+            mcs_id,
             mcs_id_merge_split,
             lifetime_list,
-            time_list, lat, lon, merging_events, splitting_events, tracking_centers_list
+            time_list,
+            lat,
+            lon,
+            merging_events,
+            splitting_events,
+            tracking_centers_list,
         ) = track_mcs(
-            detection_results, main_lifetime_thresh, main_area_thresh,
-            grid_cell_area_km2, nmaxmerge, use_li_filter=USE_LIFTING_INDEX
+            detection_results,
+            main_lifetime_thresh,
+            main_area_thresh,
+            grid_cell_area_km2,
+            nmaxmerge,
+            use_li_filter=USE_LIFTING_INDEX,
         )
         logger.info(f"Tracking for year {year} finished.")
-
 
         # --- 3d. SAVING TRACKING PHASE ---
         logger.info(f"Saving individual hourly tracking files for year {year}...")
         for i in range(len(time_list)):
             # Package all data for this single timestep into a dictionary
             tracking_data_for_timestep = {
-                "robust_mcs_id": robust_mcs_id[i],         
-                "mcs_id": mcs_id[i],           
-                "mcs_id_merge_split": mcs_id_merge_split[i], 
+                "robust_mcs_id": robust_mcs_id[i],
+                "mcs_id": mcs_id[i],
+                "mcs_id_merge_split": mcs_id_merge_split[i],
                 "lifetime": lifetime_list[i],
                 "time": time_list[i],
                 "lat": lat,
                 "lon": lon,
                 "tracking_centers": tracking_centers_list[i],
             }
-            save_tracking_result(tracking_data_for_timestep, tracking_output_dir, data_source)
-
+            save_tracking_result(
+                tracking_data_for_timestep, tracking_output_dir, data_source
+            )
 
         logger.info(f"--- Finished processing for year: {year} ---")
 

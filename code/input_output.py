@@ -9,6 +9,7 @@ import re
 import logging
 from collections import defaultdict
 
+
 def group_files_by_year(file_list):
     """
     Groups a list of file paths into a dictionary keyed by year.
@@ -26,20 +27,18 @@ def group_files_by_year(file_list):
 
         if match:
             date_str = match.group(1)
-            try:
-                # Convert the extracted 8-digit string to a datetime object
-                year = pd.to_datetime(date_str, format="%Y%m%d").year
-                files_by_year[year].append(f)
-            except ValueError:
-                logging.warning(
-                    f"Found potential date '{date_str}' in '{basename}', but it's not a valid date. Skipping."
-                )
+
+            # Convert the extracted 8-digit string to a datetime object
+            year = pd.to_datetime(date_str, format="%Y%m%d").year
+            files_by_year[year].append(f)
+
         else:
             logging.warning(
                 f"Could not parse YYYYMMDD date from filename: {basename}. Skipping."
             )
 
     return files_by_year
+
 
 def filter_files_by_date(file_list, years=None, months=None):
     """
@@ -71,21 +70,18 @@ def filter_files_by_date(file_list, years=None, months=None):
 
         if match:
             date_str = match.group(1)
-            try:
-                timestamp = pd.to_datetime(date_str, format="%Y%m%d")
-                
-                # A file is kept if its year/month is in the respective list,
-                # or if that list is empty (which means "accept all").
-                year_ok = not years or timestamp.year in years
-                month_ok = not months or timestamp.month in months
+            timestamp = pd.to_datetime(date_str, format="%Y%m%d")
 
-                if year_ok and month_ok:
-                    filtered_list.append(f)
-            except ValueError:
-                logger.warning(
-                    f"Could not parse valid date from '{basename}'. Skipping file in filter."
-                )
+            # A file is kept if its year/month is in the respective list,
+            # or if that list is empty (which means "accept all").
+            year_ok = not years or timestamp.year in years
+            month_ok = not months or timestamp.month in months
+
+            if year_ok and month_ok:
+                filtered_list.append(f)
+
     return filtered_list
+
 
 def convert_precip_units(prec, target_unit="mm/h"):
     """
@@ -420,9 +416,13 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     output_filepath = os.path.join(structured_dir, filename)
 
     # Unpack the data for this timestep
-    robust_mcs_id_arr = np.expand_dims(tracking_data_for_timestep["robust_mcs_id"], axis=0)
+    robust_mcs_id_arr = np.expand_dims(
+        tracking_data_for_timestep["robust_mcs_id"], axis=0
+    )
     mcs_id_arr = np.expand_dims(tracking_data_for_timestep["mcs_id"], axis=0)
-    mcs_id_merge_split_arr = np.expand_dims(tracking_data_for_timestep["mcs_id_merge_split"], axis=0)
+    mcs_id_merge_split_arr = np.expand_dims(
+        tracking_data_for_timestep["mcs_id_merge_split"], axis=0
+    )
     lifetime = np.expand_dims(tracking_data_for_timestep["lifetime"], axis=0)
     lat = tracking_data_for_timestep["lat"]
     lon = tracking_data_for_timestep["lon"]
@@ -448,10 +448,18 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
     ds["lon"] = (("y", "x"), lon)
 
     # Set descriptive attributes for each variable
-    ds["robust_mcs_id"].attrs["description"] = "Track IDs of main MCSs, but only for timesteps where the system's area is >= main_area_thresh."
-    ds["mcs_id"].attrs["description"] = "Track IDs showing the full lifetime of all identified main MCSs."
-    ds["mcs_id_merge_split"].attrs["description"] = "Track IDs for the 'full family tree': main MCSs plus all systems that merged into or split from them."
-    ds["lifetime"].attrs["description"] = "Pixel-wise lifetime of all tracked clusters (in timesteps)."
+    ds["robust_mcs_id"].attrs[
+        "description"
+    ] = "Track IDs of main MCSs, but only for timesteps where the system's area is >= main_area_thresh."
+    ds["mcs_id"].attrs[
+        "description"
+    ] = "Track IDs showing the full lifetime of all identified main MCSs."
+    ds["mcs_id_merge_split"].attrs[
+        "description"
+    ] = "Track IDs for the 'full family tree': main MCSs plus all systems that merged into or split from them."
+    ds["lifetime"].attrs[
+        "description"
+    ] = "Pixel-wise lifetime of all tracked clusters (in timesteps)."
 
     # Set global attributes
     ds.attrs["title"] = "MCS Tracking Results"
