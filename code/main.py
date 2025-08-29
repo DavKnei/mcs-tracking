@@ -161,7 +161,7 @@ def main():
 
     # Now, group the filtered list by year
     files_by_year = group_files_by_year(filtered_precip_files)
-
+  
     if USE_LIFTING_INDEX:
         lifting_index_data_dir = config["lifting_index_data_directory"]
         lifting_index_data_var = config["liting_index_var_name"]
@@ -320,7 +320,7 @@ def main():
             use_li_filter=USE_LIFTING_INDEX,
         )
         logger.info(f"Tracking for year {year} finished.")
-        print("Tracking for year {year} finished.")
+        print(f"Tracking for year {year} finished.")
 
         # --- 3d. SAVING TRACKING PHASE ---
         logger.info(f"Saving individual hourly tracking files for year {year}...")
