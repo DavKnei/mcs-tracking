@@ -25,9 +25,7 @@ def smooth_precipitation_field(precipitation, kernel_size=2):
     return fftconvolve(precipitation, kernel, mode="same")
 
 
-def detect_cores_connected(
-    precipitation, lat, lon, core_thresh=10.0, min_cluster_size=3
-):
+def detect_cores_connected(precipitation, core_thresh=10.0, min_cluster_size=3):
     """Cluster heavy precipitation cores using connected component labeling.
 
     This function thresholds the precipitation field at the specified core threshold
@@ -36,8 +34,6 @@ def detect_cores_connected(
 
     Args:
         precipitation (numpy.ndarray): 2D array representing the precipitation field.
-        lat (numpy.ndarray): 2D array of latitude values corresponding to the precipitation grid.
-        lon (numpy.ndarray): 2D array of longitude values corresponding to the precipitation grid.
         core_thresh (float, optional): Threshold for heavy precipitation cores (e.g., mm/h).
             Defaults to 10.0.
         min_cluster_size (int, optional): Minimum number of pixels required for a cluster to be kept.
