@@ -331,7 +331,7 @@ def save_detection_result(detection_result, output_dir, data_source):
     )
     lat = detection_result["lat"]
     lon = detection_result["lon"]
-    breakpoint()
+
     lat2d = detection_result["lat2d"]
     lon2d = detection_result["lon2d"]
     # Create an xarray Dataset
