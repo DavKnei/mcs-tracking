@@ -130,13 +130,12 @@ def main():
 
     if DO_DETECTION:
         # Start with a fresh detection log, overwriting any from a previous run.
-        setup_logging(detection_output_path, filename="detection.log", mode='w')
+        setup_logging(detection_output_path, filename="detection.log", mode="w")
         logger.info("Logging initialized for DETECTION phase.")
     else:
         # If skipping detection, start directly with a fresh tracking log.
-        setup_logging(tracking_output_dir, filename="tracking.log", mode='w')
+        setup_logging(tracking_output_dir, filename="tracking.log", mode="w")
         logger.info("Logging initialized for TRACKING phase.")
-
 
     # --- 2. FIND, FILTER, AND GROUP INPUT FILES ---
     # Find all files recursively
@@ -161,7 +160,7 @@ def main():
 
     # Now, group the filtered list by year
     files_by_year = group_files_by_year(filtered_precip_files)
-  
+
     if USE_LIFTING_INDEX:
         lifting_index_data_dir = config["lifting_index_data_directory"]
         lifting_index_data_var = config["liting_index_var_name"]
@@ -306,6 +305,8 @@ def main():
             mcs_id_merge_split,
             lifetime_list,
             time_list,
+            lat2d,
+            lon2d,
             lat,
             lon,
             merging_events,
@@ -332,6 +333,8 @@ def main():
                 "mcs_id_merge_split": mcs_id_merge_split[i],
                 "lifetime": lifetime_list[i],
                 "time": time_list[i],
+                "lat2d": lat2d,
+                "lon2d": lon2d,
                 "lat": lat,
                 "lon": lon,
                 "tracking_centers": tracking_centers_list[i],

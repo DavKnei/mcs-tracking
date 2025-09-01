@@ -33,7 +33,7 @@ def track_mcs(
     main_area_thresh,
     grid_cell_area_km2,
     nmaxmerge,
-    use_li_filter
+    use_li_filter,
 ):
     """
     Tracks Mesoscale Convective Systems (MCSs) and filters them based on a combined set of criteria.
@@ -53,8 +53,10 @@ def track_mcs(
             - "lifting_index_regions" (np.ndarray): 2D binary array where 1 indicates a cluster met the LI criterion. Optional, used if 'use_li_filter' is True.
             - "center_points" (dict): Mapping of cluster label to its (lat, lon) center. Optional.
             - "time" (datetime.datetime): Timestamp for the data.
-            - "lat" (np.ndarray): 2D array of latitudes.
-            - "lon" (np.ndarray): 2D array of longitudes.
+            - "lat2d" (np.ndarray): 2D array of latitudes.
+            - "lon2d" (np.ndarray): 2D array of longitudes.
+            - "lat" (np.ndarray): 1D array of latitudes.
+            - "lon" (np.ndarray): 1D array of longitudes.
         main_lifetime_thresh (int): The minimum number of consecutive hours a track must simultaneously meet the area and LI criteria to be considered a main MCS.
         main_area_thresh (float): The minimum area (in km²) a track must have to be considered in its mature phase.
         grid_cell_area_km2 (float): The area of a single grid cell in km².
@@ -68,8 +70,10 @@ def track_mcs(
             - main_mcs_id_merge_split (List[np.ndarray]): The most inclusive output. Shows the **full "family tree"**, containing the full lifetime of main MCSs plus the full lifetime of all smaller systems that merged into or split from them.
             - lifetime_list (List[np.ndarray]): A list of 2D arrays showing the pixel-wise lifetime (in timesteps) of all tracked clusters.
             - time_list (List[datetime.datetime]): A list of the timestamps corresponding to each frame.
-            - lat (np.ndarray): A 2D array of latitude values.
-            - lon (np.ndarray): A 2D array of longitude values.
+            - lat2d (np.ndarray): A 2D array of latitude values.
+            - lon2d (np.ndarray): A 2D array of longitude values.
+            - lat (np.ndarray): A 1D array of latitude values.
+            - lon (np.ndarray): A 1D array of longitude values.
             - merging_events (List[MergingEvent]): A list of all recorded merging events.
             - splitting_events (List[SplittingEvent]): A list of all recorded splitting events.
             - tracking_centers_list (List[dict]): A list of dictionaries, one for each timestep, mapping track IDs to their (lat, lon) center points."""
@@ -102,8 +106,8 @@ def track_mcs(
         final_labeled_regions = detection_result["final_labeled_regions"]
         center_points_dict = detection_result.get("center_points", {})
         current_time = detection_result["time"]
-        current_lat = detection_result["lat"]
-        current_lon = detection_result["lon"]
+        current_lat = detection_result["lat2d"]
+        current_lon = detection_result["lon2d"]
 
         # Get LI regions if available.
         if use_li:
@@ -301,10 +305,10 @@ def track_mcs(
         for tid in unique_ids_in_frame:
             # Calculate area once and store it
             area = np.sum(mcs_id_array == tid) * grid_cell_area_km2
-            
+
             # Get convective status and store it
             is_convective = convective_history[tid].get(i, False) if use_li else True
-            
+
             # Store in our fast lookup dictionary
             track_properties_by_time[tid][i] = {
                 "meets_area": area >= main_area_thresh,
@@ -315,7 +319,7 @@ def track_mcs(
     mcs_ids = []
     # Iterate through every track that ever existed
     for tid in list(lifetime_dict.keys()):
-        
+
         # Build the boolean series using fast dictionary lookups
         bool_series_combined = []
         for i in range(len(mcs_ids_list)):
@@ -356,9 +360,8 @@ def track_mcs(
             props = track_properties_by_time.get(tid, {}).get(i)
             if not props or not (props["meets_area"] and props["meets_li"]):
                 frame_in_phase[frame_in_phase == tid] = 0
-                
-        robust_mcs_id.append(frame_in_phase)
 
+        robust_mcs_id.append(frame_in_phase)
     # Final return statement
     return (
         robust_mcs_id,
@@ -366,8 +369,10 @@ def track_mcs(
         mcs_id_merge_split,
         lifetime_list,
         time_list,
-        lat,
-        lon,
+        detection_result["lat2d"],
+        detection_result["lon2d"],
+        detection_result["lat"],
+        detection_result["lon"],
         merging_events,
         splitting_events,
         tracking_centers_list,

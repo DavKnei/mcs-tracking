@@ -51,11 +51,11 @@ def detect_mcs_in_file(
     logger = logging.getLogger(__name__)
 
     # Load data
-    ds, lat, lon, precipitation = load_precipitation_data(
+    ds, lat2d, lon2d, lat, lon, precipitation = load_precipitation_data(
         precip_file_path, precip_data_var, lat_name, lon_name, time_index
     )
 
-    ds_li, lat, lon, lifting_index = load_lifting_index_data(
+    ds_li, lat2d, lon2d, lat, lon, lifting_index = load_lifting_index_data(
         lifting_index_file_path, lifting_index_data_var, lat_name, lon_name, time_index
     )
 
@@ -65,8 +65,6 @@ def detect_mcs_in_file(
     # Step 2: Detect heavy precipitation cores with connected component labeling
     core_labels = detect_cores_connected(
         precipitation,
-        lat,
-        lon,
         core_thresh=heavy_precip_threshold,
         min_cluster_size=3,  # Min number of points in a cluster
     )
@@ -110,13 +108,15 @@ def detect_mcs_in_file(
 
     # Step 5: Compute cluster centers of mass
     cluster_centers = compute_cluster_centers_of_mass(
-        final_labeled_regions, lat, lon, precipitation
+        final_labeled_regions, lat2d, lon2d, precipitation
     )
 
     # Prepare detection result
     detection_result = {
         "final_labeled_regions": final_labeled_regions,
         "lifting_index_regions": lifting_index_regions,
+        "lat2d": lat2d,
+        "lon2d": lon2d,
         "lat": lat,
         "lon": lon,
         "precipitation": precipitation_smooth,

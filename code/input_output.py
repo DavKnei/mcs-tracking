@@ -10,6 +10,7 @@ import sys
 import logging
 from collections import defaultdict
 
+
 def handle_exception(exc_type, exc_value, exc_traceback):
     """
     Global exception handler to log any uncaught exceptions.
@@ -208,8 +209,10 @@ def load_precipitation_data(file_path, data_var, lat_name, lon_name, time_index=
 
     Returns:
     - ds: xarray Dataset for the selected time.
-    - lat: 2D array of latitudes.
-    - lon: 2D array of longitudes.
+    - lat2d: 2D array of latitudes.
+    - lon2d: 2D array of longitudes.
+    - lat: 1D array of latitudes.
+    - lon: 1D array of latitudes
     - prec: 2D DataArray of precipitation values (scaled to mm/h).
     """
     ds = xr.open_dataset(file_path)
@@ -221,13 +224,17 @@ def load_precipitation_data(file_path, data_var, lat_name, lon_name, time_index=
 
     # Ensure lat and lon are 2D arrays.
     if latitude.ndim == 1 and longitude.ndim == 1:
-        lon, lat = np.meshgrid(longitude, latitude)
+        lon2d, lat2d = np.meshgrid(longitude, latitude)
+        lon, lat = longitude, latitude
     else:
-        lat, lon = latitude, longitude
+        lat2d, lon2d = latitude, longitude
+        # Assume a regular grid and extract 1D coordinates. Be carefull with CORDEX
+        lat = lat2d[:, 0]
+        lon = lon2d[0, :]
 
     prec = ds[str(data_var)]
     prec_converted = convert_precip_units(prec)
-    return ds, lat, lon, prec_converted
+    return ds, lat2d, lon2d, lat, lon, prec_converted
 
 
 def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=0):
@@ -244,8 +251,10 @@ def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=
 
     Returns:
     - ds: xarray Dataset for the selected time.
-    - lat: 2D array of latitudes.
-    - lon: 2D array of longitudes.
+    - lat2d: 2D array of latitudes.
+    - lon2d: 2D array of longitudes.
+    - lat: 1D array of latitudes.
+    - lon: 1D array of latitudes
     - prec: 2D DataArray of precipitation values (scaled to mm/h).
     """
     ds = xr.open_dataset(file_path)
@@ -257,9 +266,13 @@ def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=
 
     # Ensure lat and lon are 2D arrays.
     if latitude.ndim == 1 and longitude.ndim == 1:
-        lon, lat = np.meshgrid(longitude, latitude)
+        lon2d, lat2d = np.meshgrid(longitude, latitude)
+        lon, lat = longitude, latitude
     else:
-        lat, lon = latitude, longitude
+        lat2d, lon2d = latitude, longitude
+        # Assume a regular grid and extract 1D coordinates. Be carefull with CORDEX
+        lat = lat2d[:, 0]
+        lon = lon2d[0, :]
 
     li = ds[str(data_var)]
     # Convert the lifting index data to K using the separate conversion function.
@@ -270,7 +283,7 @@ def load_lifting_index_data(file_path, data_var, lat_name, lon_name, time_index=
     data_vars_list.remove(data_var)
     ds = ds.drop_vars(data_vars_list)
 
-    return ds, lat, lon, li_converted
+    return ds, lat2d, lon2d, lat, lon, li_converted
 
 
 def serialize_center_points(center_points):
@@ -318,17 +331,19 @@ def save_detection_result(detection_result, output_dir, data_source):
     )
     lat = detection_result["lat"]
     lon = detection_result["lon"]
-
+    breakpoint()
+    lat2d = detection_result["lat2d"]
+    lon2d = detection_result["lon2d"]
     # Create an xarray Dataset
     ds = xr.Dataset(
         {
-            "final_labeled_regions": (["time", "y", "x"], final_labeled_regions),
-            "lifting_index_regions": (["time", "y", "x"], lifting_index_regions),
+            "final_labeled_regions": (["time", "lat", "lon"], final_labeled_regions),
+            "lifting_index_regions": (["time", "lat", "lon"], lifting_index_regions),
         },
         coords={
             "time": [time_val],
-            "y": np.arange(final_labeled_regions.shape[1]),
-            "x": np.arange(final_labeled_regions.shape[2]),
+            "lat": lat,
+            "lon": lon,
         },
         attrs={
             "description": "Detection results of MCSs for a single timestep.",
@@ -337,8 +352,8 @@ def save_detection_result(detection_result, output_dir, data_source):
     )
 
     # Add lat/lon as DataArray variables
-    ds["lat"] = (("y", "x"), lat)
-    ds["lon"] = (("y", "x"), lon)
+    ds["latitude"] = (("lat", "lon"), lat2d)
+    ds["longitude"] = (("lat", "lon"), lon2d)
 
     # Handle center points if they exist
     center_points = detection_result.get("center_points", {})
@@ -392,6 +407,8 @@ def load_individual_detection_files(year_input_dir, use_li_filter):
                 final_labeled_regions = ds["final_labeled_regions"].values[0]
                 lat = ds["lat"].values
                 lon = ds["lon"].values
+                lat2d = ds["latitude"].values
+                lon2d = ds["longitude"].values
 
                 center_points_dict = {}
                 if "center_points_t0" in ds["final_labeled_regions"].attrs:
@@ -411,6 +428,8 @@ def load_individual_detection_files(year_input_dir, use_li_filter):
                 detection_result = {
                     "final_labeled_regions": final_labeled_regions,
                     "time": time_val,
+                    "lat2d": lat2d,
+                    "lon2d": lon2d,
                     "lat": lat,
                     "lon": lon,
                     "center_points": center_points_dict,
@@ -465,28 +484,33 @@ def save_tracking_result(tracking_data_for_timestep, output_dir, data_source):
         tracking_data_for_timestep["mcs_id_merge_split"], axis=0
     )
     lifetime = np.expand_dims(tracking_data_for_timestep["lifetime"], axis=0)
+
     lat = tracking_data_for_timestep["lat"]
     lon = tracking_data_for_timestep["lon"]
+
+    lat2d = tracking_data_for_timestep["lat2d"]
+    lon2d = tracking_data_for_timestep["lon2d"]
+
     tracking_centers = tracking_data_for_timestep["tracking_centers"]
 
     # Create an xarray Dataset
     ds = xr.Dataset(
         {
-            "robust_mcs_id": (["time", "y", "x"], robust_mcs_id_arr),
-            "mcs_id": (["time", "y", "x"], mcs_id_arr),
-            "mcs_id_merge_split": (["time", "y", "x"], mcs_id_merge_split_arr),
-            "lifetime": (["time", "y", "x"], lifetime),
+            "robust_mcs_id": (["time", "lat", "lon"], robust_mcs_id_arr),
+            "mcs_id": (["time", "lat", "lon"], mcs_id_arr),
+            "mcs_id_merge_split": (["time", "lat", "lon"], mcs_id_merge_split_arr),
+            "lifetime": (["time", "lat", "lon"], lifetime),
         },
         coords={
             "time": [time_val],
-            "y": np.arange(lat.shape[0]),
-            "x": np.arange(lat.shape[1]),
+            "lat": lat,
+            "lon": lon,
         },
     )
 
     # Attach lat/lon and metadata
-    ds["lat"] = (("y", "x"), lat)
-    ds["lon"] = (("y", "x"), lon)
+    ds["latitude"] = (("lat", "lon"), lat2d)
+    ds["longitude"] = (("lat", "lon"), lon2d)
 
     # Set descriptive attributes for each variable
     ds["robust_mcs_id"].attrs[
