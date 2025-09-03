@@ -1,17 +1,14 @@
-# preprocess_lifting_index.py
-
 import xarray as xr
 import numpy as np
 import pandas as pd
-import glob
 import os
 import argparse
 import logging
 import xesmf as xe
+import multiprocessing
 from collections import defaultdict
 from pathlib import Path
 
-# nohup ID:  3807301
 # --- Constants ---
 RD = 287.05  # Gas constant for dry air, J/(kg*K)
 G = 9.81  # Gravity, m/s^2
@@ -52,14 +49,155 @@ def compute_li_for_parcel(T_src, q_src, T_env500, sp_hpa, p_src_hpa):
     li = T_env500 - t_parcel_500
 
     # Use np.where to conditionally mask out values where the parcel is underground.
-    # This is the vectorized equivalent of the original if-statement.
     return np.where(sp_hpa <= p_src_hpa, np.nan, li)
+
+
+def process_month(month, file_paths, ds_source_grid, ds_target_grid, weights_path, args, lat_min, lat_max, lon_min, lon_max):
+    """
+    Worker function to process all data for a single month.
+    This function is designed to be called by a multiprocessing pool.
+    """
+    pid = os.getpid()
+    
+    # --- Initialize the regridder within the worker process ---
+    regridder = xe.Regridder(
+        ds_source_grid,
+        ds_target_grid,
+        "bilinear",
+        reuse_weights=True,  # The weights file is guaranteed to exist
+        filename=weights_path,
+    )
+    logging.info(f"[PID {pid}] Regridder initialized for month {month}.")
+    
+    logging.info(f"[PID {pid}] Processing data for {month}...")
+
+    # --- EFFICIENT CHECK: Determine if all output files for this month already exist ---
+    year, month_num = map(int, month.split("-"))
+    try:
+        days_in_month = pd.Period(month).days_in_month
+        expected_hours = pd.date_range(
+            start=f"{month}-01", periods=days_in_month * 24, freq="h"
+        )
+    except ValueError:
+        logging.error(f"[PID {pid}] Invalid month string format: {month}. Skipping.")
+        return
+
+    output_files_exist = []
+    for timestamp in expected_hours:
+        output_path = Path(args.output_dir) / timestamp.strftime("%Y/%m")
+        output_filename = (
+            output_path / f"lifting_index_{timestamp.strftime('%Y%m%dT%H')}.nc"
+        )
+        output_files_exist.append(output_filename.exists())
+
+    if all(output_files_exist):
+        logging.info(f"[PID {pid}] All output files for {month} already exist. Skipping.")
+        return
+
+    try:
+        with xr.open_dataset(
+            file_paths["pl"], chunks={"valid_time": 24}
+        ) as ds_pl, xr.open_dataset(
+            file_paths["sp"], chunks={"valid_time": 24}
+        ) as ds_sp:
+
+            ds_pl = ds_pl.rename({"valid_time": "time"})
+            ds_sp = ds_sp.rename({"valid_time": "time"})
+
+            ds_pl_aligned, ds_sp_aligned = xr.align(ds_pl, ds_sp, join="inner")
+
+            if "expver" in ds_pl_aligned:
+                ds_pl_aligned = ds_pl_aligned.drop_vars("expver")
+
+            if ds_pl_aligned.time.size == 0:
+                logging.warning(f"[PID {pid}] No matching time steps found for {month}. Skipping.")
+                return
+            logging.info(
+                f"[PID {pid}] Aligned datasets for {month}, found {ds_pl_aligned.time.size} matching time steps."
+            )
+
+            ds_pl_cropped = ds_pl_aligned.sortby("latitude").sel(
+                latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max)
+            )
+            ds_sp_cropped = ds_sp_aligned.sortby("latitude").sel(
+                latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max)
+            )
+
+            sp_hpa = ds_sp_cropped.sp / 100.0
+            T_env500 = ds_pl_cropped.t.sel(pressure_level=500)
+
+            li_candidates = []
+            for p_src in [925, 850, 700]:
+                T_src = ds_pl_cropped.t.sel(pressure_level=p_src)
+                q_src = ds_pl_cropped.q.sel(pressure_level=p_src)
+                li_level = xr.apply_ufunc(
+                    compute_li_for_parcel,
+                    T_src,
+                    q_src,
+                    T_env500,
+                    sp_hpa,
+                    p_src,
+                    dask="parallelized",
+                    output_dtypes=[float],
+                )
+                li_candidates.append(li_level)
+
+            li_all_levels = xr.concat(
+                li_candidates, dim=pd.Index([925, 850, 700], name="pressure_level")
+            )
+            li_final_native = li_all_levels.min(dim="pressure_level", skipna=True)
+
+            logging.info(f"[PID {pid}] Remapping LI field for {month}...")
+
+            li_to_regrid = li_final_native.rename(
+                {"latitude": "lat", "longitude": "lon"}
+            )
+            li_to_regrid = li_to_regrid.transpose("time", "lat", "lon")
+            li_regridded = regridder(li_to_regrid)
+
+            # --- Save results to hourly files ---
+            for time_step in li_regridded.time.values:
+                timestamp = pd.to_datetime(time_step)
+                output_path = Path(args.output_dir) / timestamp.strftime("%Y/%m")
+                output_filename = (
+                    output_path / f"lifting_index_{timestamp.strftime('%Y%m%dT%H')}.nc"
+                )
+
+                if output_filename.exists():
+                    continue
+
+                output_path.mkdir(parents=True, exist_ok=True)
+
+                ds_hour = li_regridded.sel(time=slice(timestamp, timestamp))
+                ds_out = ds_hour.to_dataset(name="LI")
+                
+                # Clean up dataset before saving
+                vars_to_drop = ['number', 'expver']
+                for var in vars_to_drop:
+                    if var in ds_out:
+                        ds_out = ds_out.drop_vars(var)
+                
+                ds_out['LI'].attrs['units'] = 'K'
+                ds_out.attrs = {
+                    "Title": "Remapped Lifted Index calculated from ERA5",
+                    "Description": "Most unstable LI from 925, 850, and 700 hPa source parcels.",
+                    "Source": "ERA5",
+                    "Method": "Pucik et al. (2017), J. Climate",
+                    "units": "K",
+                    "Author": "David Kneidinger",
+                    "Email": "<david.kneidinger@uni-graz.at>",
+                }
+                ds_out.to_netcdf(output_filename)
+                logging.info(f"[PID {pid}] Saved: {output_filename}")
+
+    except Exception as e:
+        logging.error(f"[PID {pid}] An error occurred while processing {month}: {e}")
 
 
 def parse_arguments():
     """Parses command-line arguments for the LI calculation script."""
     parser = argparse.ArgumentParser(
-        description="Calculate, remap, and save Lifted Index (LI) from ERA5 data."
+        description="Calculate, remap, and save Lifted Index (LI) from ERA5 data in parallel."
     )
     parser.add_argument(
         "--pl_dir",
@@ -82,8 +220,8 @@ def parse_arguments():
     parser.add_argument(
         "--target_grid_file",
         type=str,
-        default="/reloclim/dkn/data/IMERG_most_final/1998/01/3B-HHR.MS.MRG.3IMERG.V07B_19980101_0000.nc",
-        help="Path to a sample NetCDF file (e.g., IMERG) that defines the target grid for remapping.",
+        default="/reloclim/dkn/data/IMERG/1998/01/3B-HHR.MS.MRG.3IMERG.V07B_19980101_0000.nc",
+        help="Path to a sample NetCDF file that defines the target grid for remapping.",
     )
     parser.add_argument(
         "--weights_dir",
@@ -92,10 +230,16 @@ def parse_arguments():
         help="Directory to store (or load from) the xesmf remapping weights file.",
     )
     parser.add_argument(
-        "--start_year", type=int, default=2000, help="The first year to process."
+        "--start_year", type=int, default=1998, help="The first year to process."
     )
     parser.add_argument(
-        "--end_year", type=int, default=2020, help="The last year to process."
+        "--end_year", type=int, default=1999, help="The last year to process."
+    )
+    parser.add_argument(
+        "--num_cores",
+        type=int,
+        default=20,
+        help="Number of CPU cores to use for parallel processing.",
     )
     return parser.parse_args()
 
@@ -138,203 +282,53 @@ def main():
                 files_by_month[month_str]["sp"] = sp_file
 
     if not files_by_month:
-        logging.error(
-            "No matching pressure level and surface files found for the given year range."
-        )
+        logging.error("No matching files found for the given year range.")
         return
+    logging.info(f"Found {len(files_by_month)} months to process.")
 
-    # --- 3. Initialize Regridder by calculating LI for a single timestamp ---
-    logging.info(
-        "--- Initializing regridder by calculating LI for a single timestamp ---"
-    )
+    # --- 3. Prepare for Regridding (main process) ---
+    logging.info("--- Preparing for regridding ---")
     first_month = next(iter(files_by_month))
     first_month_paths = files_by_month[first_month]
-    logging.info(f"Using data from {first_month} to define source grid for regridding.")
-
+    
     with xr.open_dataset(first_month_paths["pl"]) as ds_pl_sample, xr.open_dataset(
         first_month_paths["sp"]
     ) as ds_sp_sample:
-
-        ds_pl_sample = ds_pl_sample.rename({"valid_time": "time"})
-        ds_sp_sample = ds_sp_sample.rename({"valid_time": "time"})
-        ds_pl_aligned_s, ds_sp_aligned_s = xr.align(
-            ds_pl_sample, ds_sp_sample, join="inner"
-        )
-
-        # Select only the first timestamp
-        ds_pl_first_step = ds_pl_aligned_s.isel(time=0)
-        ds_sp_first_step = ds_sp_aligned_s.isel(time=0)
-
-        ds_pl_cropped_s = ds_pl_first_step.sortby("latitude").sel(
+        ds_pl_cropped_s = ds_pl_sample.sortby("latitude").sel(
             latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max)
         )
-        ds_sp_cropped_s = ds_sp_first_step.sortby("latitude").sel(
-            latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max)
-        )
-
-        # Perform the LI calculation on this single timestep
-        sp_hpa_s = ds_sp_cropped_s.sp / 100.0
-        T_env500_s = ds_pl_cropped_s.t.sel(pressure_level=500)
-
-        li_candidates_s = []
-        for p_src in [925, 850, 700]:
-            T_src_s = ds_pl_cropped_s.t.sel(pressure_level=p_src)
-            q_src_s = ds_pl_cropped_s.q.sel(pressure_level=p_src)
-            li_level_s = xr.apply_ufunc(
-                compute_li_for_parcel,
-                T_src_s,
-                q_src_s,
-                T_env500_s,
-                sp_hpa_s,
-                p_src,
-                dask="allowed",
-                output_dtypes=[float],
-            )
-            li_candidates_s.append(li_level_s)
-
-        li_all_levels_s = xr.concat(
-            li_candidates_s, dim=pd.Index([925, 850, 700], name="pressure_level")
-        )
-        li_final_native_sample = li_all_levels_s.min(dim="pressure_level", skipna=True)
-
-    # Create the source grid from the result of the sample LI calculation. This is the most robust method.
     ds_source_grid = xr.Dataset(
-        {
-            "lat": li_final_native_sample.latitude,
-            "lon": li_final_native_sample.longitude,
-        }
+        {"lat": ds_pl_cropped_s.latitude, "lon": ds_pl_cropped_s.longitude}
     )
 
     Path(args.weights_dir).mkdir(parents=True, exist_ok=True)
     weights_path = os.path.join(args.weights_dir, "bilinear_era5_to_target.nc")
-    regridder = xe.Regridder(
+    
+    # Create the weights file if it doesn't exist. This is done once in the main process
+    # to avoid race conditions where multiple workers try to create it at the same time.
+    logging.info("Ensuring remapping weights file exists...")
+    _ = xe.Regridder(
         ds_source_grid,
         ds_target_grid,
         "bilinear",
         reuse_weights=os.path.exists(weights_path),
         filename=weights_path,
     )
-    logging.info(f"Regridder initialized. Weights are stored at: {weights_path}")
+    logging.info(f"Regridder weights are available at: {weights_path}")
 
-    # --- 4. Process each month ---
-    for month, file_paths in files_by_month.items():
-        logging.info(f"Processing data for {month}...")
+    # --- 4. Process each month in parallel ---
+    logging.info(f"--- Starting parallel processing on {args.num_cores} cores ---")
+    tasks = [
+        (month, paths, ds_source_grid, ds_target_grid, weights_path, args, lat_min, lat_max, lon_min, lon_max)
+        for month, paths in files_by_month.items()
+    ]
 
-        # --- EFFICIENT CHECK: Determine if all output files for this month already exist ---
-        year, month_num = map(int, month.split("-"))
-        days_in_month = pd.Period(month).days_in_month
-        expected_hours = pd.date_range(
-            start=f"{month}-01", periods=days_in_month * 24, freq="h"
-        )
+    with multiprocessing.Pool(processes=args.num_cores) as pool:
+        pool.starmap(process_month, tasks)
 
-        output_files_exist = []
-        for timestamp in expected_hours:
-            output_path = Path(args.output_dir) / timestamp.strftime("%Y/%m")
-            output_filename = (
-                output_path / f"lifting_index_{timestamp.strftime('%Y%m%dT%H')}.nc"
-            )
-            output_files_exist.append(output_filename.exists())
-
-        if all(output_files_exist):
-            logging.info(f"All output files for {month} already exist. Skipping.")
-            continue
-
-        with xr.open_dataset(
-            file_paths["pl"], chunks={"valid_time": 24}
-        ) as ds_pl, xr.open_dataset(
-            file_paths["sp"], chunks={"valid_time": 24}
-        ) as ds_sp:
-
-            ds_pl = ds_pl.rename({"valid_time": "time"})
-            ds_sp = ds_sp.rename({"valid_time": "time"})
-
-            ds_pl_aligned, ds_sp_aligned = xr.align(ds_pl, ds_sp, join="inner")
-
-            # Drop problematic metadata variables early to prevent issues later.
-            if "expver" in ds_pl_aligned:
-                ds_pl_aligned = ds_pl_aligned.drop_vars("expver")
-
-            if ds_pl_aligned.time.size == 0:
-                logging.warning(f"No matching time steps found for {month}. Skipping.")
-                continue
-            logging.info(
-                f"Aligned datasets for {month}, found {ds_pl_aligned.time.size} matching time steps."
-            )
-
-            ds_pl_cropped = ds_pl_aligned.sortby("latitude").sel(
-                latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max)
-            )
-            ds_sp_cropped = ds_sp_aligned.sortby("latitude").sel(
-                latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max)
-            )
-
-            sp_hpa = ds_sp_cropped.sp / 100.0
-            T_env500 = ds_pl_cropped.t.sel(pressure_level=500)
-
-            li_candidates = []
-            for p_src in [925, 850, 700]:
-                T_src = ds_pl_cropped.t.sel(pressure_level=p_src)
-                q_src = ds_pl_cropped.q.sel(pressure_level=p_src)
-                li_level = xr.apply_ufunc(
-                    compute_li_for_parcel,
-                    T_src,
-                    q_src,
-                    T_env500,
-                    sp_hpa,
-                    p_src,
-                    dask="parallelized",
-                    output_dtypes=[float],
-                )
-                li_candidates.append(li_level)
-
-            li_all_levels = xr.concat(
-                li_candidates, dim=pd.Index([925, 850, 700], name="pressure_level")
-            )
-            li_final_native = li_all_levels.min(dim="pressure_level", skipna=True)
-
-            logging.info(f"Remapping LI field for {month}...")
-
-            li_to_regrid = li_final_native.rename(
-                {"latitude": "lat", "longitude": "lon"}
-            )
-            li_to_regrid = li_to_regrid.transpose("time", "lat", "lon")
-            li_regridded = regridder(li_to_regrid)
-
-            # --- 5. Save results to hourly files ---
-            for time_step in li_regridded.time.values:
-                timestamp = pd.to_datetime(time_step)
-
-                # Create output path: YYYY/MM/
-                output_path = Path(args.output_dir) / timestamp.strftime("%Y/%m")
-                output_filename = (
-                    output_path / f"lifting_index_{timestamp.strftime('%Y%m%dT%H')}.nc"
-                )
-
-                if output_filename.exists():
-                    continue
-
-                output_path.mkdir(parents=True, exist_ok=True)
-
-                # Select data for the current timestamp, keeping the time dimension
-                ds_hour = li_regridded.sel(time=slice(timestamp, timestamp))
-                ds_out = ds_hour.to_dataset(name="LI")
-                ds_out = ds_out.drop(['number', 'expver'])
-                
-                ds_out['LI'].attrs['units'] = 'K'
-                ds_out.attrs = {
-                    "Title": "Remapped Lifted Index calculated from ERA5",
-                    "Description": "Most unstable LI from 925, 850, and 700 hPa source parcels.",
-                    "Source": "ERA5",
-                    "Method": "Pucik et al. (2017), J. Climate",
-                    "units": "K",
-                    "Author": "David Kneidinger",
-                    "Email": "<david.kneidinger@uni-graz.at>",
-                }
-                ds_out.to_netcdf(output_filename)
-                logging.info(f"Saved: {output_filename}")
-
-    logging.info("Preprocessing complete.")
+    logging.info("--- All tasks dispatched. Preprocessing complete. ---")
 
 
 if __name__ == "__main__":
     main()
+
