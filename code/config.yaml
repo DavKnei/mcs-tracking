@@ -2,11 +2,11 @@
 
 
 # Data
-precip_data_directory: "/reloclim/dkn/data/IMERG_most_final"
+precip_data_directory: "/reloclim/dkn/data/IMERG"
 lifting_index_data_directory: "/reloclim/dkn/data/ERA5/lifting_index"
 file_suffix: ".nc"
-detection_output_path: "/reloclim/dkn/data/detection_tracking_output/detection"
-tracking_output_dir: "/reloclim/dkn/data/detection_tracking_output/tracking"
+detection_output_path: "."
+tracking_output_dir: "."
 
 grid_size_km: 11.0
 precip_var_name: "precipitation"
@@ -17,24 +17,24 @@ data_source: "IMERG precipitation and ERA5 Lifting Index"
 
 # Years and Months to process
 # empty list uses all available data in the specified directory
-years: []
-months: [5,6,7,8,9]
+years: [2020]
+months: [5]
 
 # Detection parameter
 min_size_threshold: 10  # min number of grid cells for an object to be detected
-heavy_precip_threshold: 8.0  # mm/h
+heavy_precip_threshold: 10.0  # mm/h
 moderate_precip_threshold: 1.0
 min_nr_plumes: 1  # number of heavy precipitation plums
 lifting_index_percentage_threshold: 0.2  # mm/h
 
 # Tracking parameter
-main_lifetime_thresh: 5  # min number of hours for an MCS in the mature state
-main_area_thresh: 2000  # min area for a system to be in the mature state
+main_lifetime_thresh: 4  # min number of hours for an MCS in the mature state
+main_area_thresh: 5000  # min area for a system to be in the mature state
 grid_cell_area_km2: 121  # area in km2
 nmaxmerge: 5  # maximum number of objects to merge in a single timestep
 
 # Other parameter
 use_lifting_index: True
-detection: True
-use_multiprocessing: True
+detection: False
+use_multiprocessing: False
 number_of_cores: 32

@@ -81,7 +81,7 @@ All parameters are controlled via a `config.yaml` file. Below are examples of th
 
 - **Tracking Thresholds**:
   ```yaml
-  main_lifetime_thresh: 6
+  main_lifetime_thresh: 5
   main_area_thresh: 5000
   grid_cell_area_km2: 16
   nmaxmerge: 5
