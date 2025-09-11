@@ -20,6 +20,7 @@ from tracking_helper_func import (
     handle_continuation,
     handle_no_overlap,
     compute_max_consecutive,
+    attempt_advection_rescue
 )
 from tracking_merging import handle_merging
 from tracking_splitting import handle_splitting
@@ -170,11 +171,31 @@ def track_mcs(
                 overlap_threshold=10,
             )
             temp_assigned = {}
-            labels_no_overlap = []
+            all_current_labels = np.unique(final_labeled_regions[final_labeled_regions != 0])
+            labels_with_overlap = set(overlap_map.keys())
+            labels_no_overlap = [lbl for lbl in all_current_labels if lbl not in labels_with_overlap]
+
+            if labels_no_overlap:
+                rescued_overlaps = attempt_advection_rescue(
+                    labels_no_overlap,
+                    previous_labeled_regions,
+                    final_labeled_regions,
+                    previous_cluster_ids,
+                    grid_cell_area_km2,
+                )
+                if rescued_overlaps:
+                    overlap_map.update(rescued_overlaps)
+                    # Update labels_no_overlap to remove the ones we just rescued
+                    rescued_labels = set(rescued_overlaps.keys())
+                    labels_no_overlap = [lbl for lbl in labels_no_overlap if lbl not in rescued_labels]
+
 
             for new_lbl, old_ids in overlap_map.items():
                 if len(old_ids) == 0:
-                    labels_no_overlap.append(new_lbl)
+                    # This condition should ideally not be met anymore for labels that were checked,
+                    # but we keep it for robustness.
+                    if new_lbl not in labels_no_overlap:
+                         labels_no_overlap.append(new_lbl)
                 elif len(old_ids) == 1:
                     chosen_id = old_ids[0]
                     handle_continuation(
