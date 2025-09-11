@@ -238,7 +238,7 @@ def parse_arguments():
     parser.add_argument(
         "--num_cores",
         type=int,
-        default=20,
+        default=1,
         help="Number of CPU cores to use for parallel processing.",
     )
     return parser.parse_args()
