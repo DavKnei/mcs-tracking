@@ -22,28 +22,6 @@ def create_circular_cell(pr_array, center_y, center_x, radius, heavy_prec, moder
     if np.any(inside_mask):
         pr_array[inside_mask] = moderate_prec + (heavy_prec - moderate_prec) * (1 - dist[inside_mask] / radius)
 
-def create_circular_li_field(li_array, center_y, center_x, radius, min_val, max_val):
-    """
-    Create a circular LI field with a linear gradient from min_val at the center to max_val at the edge.
-    """
-    ny, nx = li_array.shape
-    y_indices, x_indices = np.indices((ny, nx))
-    dist = np.sqrt((y_indices - center_y)**2 + (x_indices - center_x)**2)
-    inside_mask = dist <= radius
-    if np.any(inside_mask):
-        li_array[inside_mask] = min_val + (max_val - min_val) * (dist[inside_mask] / radius)
-
-def create_horizontal_li_bands(li_array, n_bands, band_values):
-    """
-    Fill li_array with horizontal bands that span the entire domain.
-    The vertical dimension is split into n_bands equal parts, and each band is assigned a constant LI value from band_values.
-    """
-    ny, nx = li_array.shape
-    for band in range(n_bands):
-        y_start = int(band * ny / n_bands)
-        y_end = int((band + 1) * ny / n_bands)
-        li_array[y_start:y_end, :] = band_values[band]
-
 def save_single_timestep(out_dir, scenario_name, current_time, lat2d, lon2d, pr_slice, li_slice):
     """
     Save a single timestep of test data as a netCDF file.
@@ -59,7 +37,7 @@ def save_single_timestep(out_dir, scenario_name, current_time, lat2d, lon2d, pr_
             "lon": (("y", "x"), lon2d)
         },
         attrs={
-            "description": "Complex scenario with growth, translation, merging, and splitting",
+            "description": "Complex scenario with growth, translation, merging, and splitting, plus a fast-mover.",
             "author": "David Kneidinger",
             "email": "david.kneidinger@uni-graz.at"
         }
@@ -68,23 +46,22 @@ def save_single_timestep(out_dir, scenario_name, current_time, lat2d, lon2d, pr_
     ds["pr"].attrs["long_name"] = "precipitation"
     ds["li"].attrs["units"] = "Kelvin"
     ds["li"].attrs["long_name"] = "lifting index"
-    file_name = f"{scenario_name}_{current_time:%Y-%m-%d-%H-00}.nc_test"
+    file_name = f"{scenario_name}_{current_time:%Y%m%d-%H-00}.nc_test"
     file_path = os.path.join(out_dir, file_name)
     ds.to_netcdf(file_path)
 
 def create_test_data_scenario(out_dir):
     """
-    Creates test data:
-      - Three circular precipitation systems that have merging and splitting scenarios.
-      - One additional large MCS-like precipitation system that mvoes before the three smaller systems. 
-      - One extra big system above the three systems. This extra system moves horiontally in space, but has no convective environment.
-      - The LI field is defined over the entire domain as horizontal bands with values [-15, -10, -5, -2, 2].
+    Creates test data on a 200x200 grid:
+      - The original three-cluster merge/split scenario, shifted up.
+      - A large, non-growing system at the top which is in a non-convective LI band.
+      - A new, isolated, fast-moving system at the bottom in a convective LI band.
     """
     os.makedirs(out_dir, exist_ok=True)
 
-    # Grid (100 x 100)
-    lat = np.arange(-5, 5, 0.1)
-    lon = np.arange(0, 10, 0.1)
+    # Grid (200 x 200)
+    lat = np.arange(-10, 10, 0.1)
+    lon = np.arange(0, 20, 0.1)
     lat2d, lon2d = np.meshgrid(lat, lon, indexing='ij')
     ny, nx = lat2d.shape
 
@@ -96,125 +73,86 @@ def create_test_data_scenario(out_dir):
     heavy_prec = 15.0
     moderate_prec = 5.0
 
-    # Initial positions for three clusters at t=0
-    top_init_y = 30
-    mid_init_y = 50
-    bot_init_y = 70
-    init_x = 20
+    # --- Initial positions for systems ---
+    top_init_y = 80
+    mid_init_y = 100
+    bot_init_y = 120
+    init_x = 40
+    
+    non_convective_top_y = 170
+    non_convective_top_radius = 15
 
-    # Radius evolution for the three clusters
+    fast_mover_y = 30
+    fast_mover_init_x = 20
+    fast_mover_radius = 10
+    
+    # --- LI band definition ---
+    # Everything at or above this y-index is non-convective.
+    non_convective_y_threshold = 150
+
+    def fast_mover_x_pos(t):
+        return fast_mover_init_x + 21 * t
+
     def radius_func(t):
-        if t <= 3:
-            return linear_interpolate(t, 0, 3, 2, 7)
-        elif t <= 13:
-            return 7
-        else:
-            return linear_interpolate(t, 13, 15, 7, 2)
+        if t <= 3: return linear_interpolate(t, 0, 3, 2, 7)
+        elif t <= 13: return 7
+        else: return linear_interpolate(t, 13, 15, 7, 2)
 
-    # X movement for the three clusters (cells move east)
     def x_pos(t):
         return init_x + 5*t
 
-    # Vertical movement functions for the three clusters
     def bot_y_func(t):
-        if t <= 5:
-            return 70
-        elif t == 6:
-            return 60
-        elif t == 7:
-            return 55  # merged with mid
-        elif t <= 10:
-            return 55  # stable merged
-        elif t == 11:
-            return 55
-        elif t == 12:
-            return 65  # start splitting bottom
-        elif t == 13:
-            return 70
-        else:
-            return 70
+        if t <= 5: return bot_init_y
+        elif t == 6: return bot_init_y - 10
+        elif t == 7: return mid_init_y + 5
+        elif t <= 11: return mid_init_y + 5
+        elif t == 12: return bot_init_y - 5
+        else: return bot_init_y
 
     def top_y_func(t):
-        if t <= 7:
-            return 30
-        elif t == 8:
-            return 45  # merges with mid
-        elif t <= 10:
-            return 45  # stable merged
-        elif t == 11:
-            return 30  # splits off
-        elif t <= 12:
-            return 30
-        elif t <= 13:
-            return 25  # fully separated
-        else:
-            return 25
+        if t <= 7: return top_init_y
+        elif t == 8: return mid_init_y - 15
+        elif t <= 10: return mid_init_y - 15
+        elif t == 11: return top_init_y
+        else: return top_init_y - 5
 
     def mid_y_func(t):
-        return 50
+        return mid_init_y
 
-    # Extra precipitation system (the one that is non-convective)
-    # This system moves in space as the others. We use a similar translation.
-    def extra_x_func(t):
-        return x_pos(t) + 30
-    # For extra_y, let it follow a similar pattern to mid_y.
-    def extra_y_func(t):
-        return 50  # constant mid-level for extra system
-
-    extra_radius = 8  # smaller than before
-    # For the extra system, set LI to a constant value (non-convective): -1.
-    
     scenario_name = "MCS-test"
 
     for t in range(nt):
         current_time = start_time + timedelta(hours=t)
         pr_slice = np.zeros((ny, nx), dtype=np.float32)
         li_slice = np.zeros((ny, nx), dtype=np.float32)
-
-        # --- Create the three circular clusters ---
+        
+        # --- Create Lifting Index Bands ---
+        li_slice[:non_convective_y_threshold, :] = -10.0  # Convective environment
+        li_slice[non_convective_y_threshold:, :] = 0.0    # Non-convective environment
+        
+        # --- Create the three-cluster merging/splitting scenario ---
         r = radius_func(t)
         tx = int(x_pos(t))
-        ty_top = top_y_func(t)
-        ty_mid = mid_y_func(t)
-        ty_bot = bot_y_func(t)
+        ty_top = int(top_y_func(t))
+        ty_mid = int(mid_y_func(t))
+        ty_bot = int(bot_y_func(t))
 
-        # Top cluster
         create_circular_cell(pr_slice, ty_top, tx, r, heavy_prec, moderate_prec)
-        create_circular_li_field(li_slice, ty_top, tx, r, -15, -2)
-
-        # Middle cluster
-        create_circular_cell(pr_slice, ty_mid, tx, r+2, heavy_prec, moderate_prec)
-        create_circular_li_field(li_slice, ty_mid, tx, r+2, -15, -2)
-
-        # Bottom cluster
+        create_circular_cell(pr_slice, ty_mid, tx, r + 2, heavy_prec, moderate_prec)
         create_circular_cell(pr_slice, ty_bot, tx, r, heavy_prec, moderate_prec)
-        create_circular_li_field(li_slice, ty_bot, tx, r, -15, -2)
 
-        # --- Create an additional MCS-like precipitation system (non-convective) ---
-        create_circular_cell(pr_slice, 50, tx+30, r+5, heavy_prec, moderate_prec)
-        ny_indices, nx_indices = pr_slice.shape
-        y_idx, x_idx = np.indices((ny_indices, nx_indices))
-        dist_extra = np.sqrt((y_idx - 50)**2 + (x_idx - (tx+30))**2)
-        extra_mask1 = dist_extra <= (r+5)
-        li_slice[extra_mask1] = -1  # Not meeting LI < -2
-
-        # --- Create the extra big system above the three clusters ---
-        # This extra system moves in space similarly to the others.
-        extra_center_x = extra_x_func(t)
-        extra_center_y = extra_y_func(t)
-        create_circular_cell(pr_slice, 90, tx, 10, heavy_prec, moderate_prec)
-        # For the LI field, instead of a circular gradient, create horizontal bands over the entire domain.
-        li_extra = np.empty((ny, nx), dtype=np.float32)
-        n_bands = 5
-        li_band_values = [-15, -10, -5, -2, 2]
-        create_horizontal_li_bands(li_extra, n_bands, li_band_values)
-        # Override the LI field for the extra system over the whole domain.
-        li_slice = li_extra
+        # --- Create the large, non-growing system in the non-convective band ---
+        top_system_x = int(init_x + 4 * t)
+        create_circular_cell(pr_slice, non_convective_top_y, top_system_x, non_convective_top_radius, heavy_prec, moderate_prec)
+        
+        # --- Add the fast-moving system in the convective band ---
+        fast_x = int(fast_mover_x_pos(t))
+        if fast_x < nx - fast_mover_radius:
+            create_circular_cell(pr_slice, fast_mover_y, fast_x, fast_mover_radius, heavy_prec, moderate_prec)
 
         save_single_timestep(out_dir, scenario_name, current_time, lat2d, lon2d, pr_slice, li_slice)
 
     print("Updated test data created successfully at", out_dir)
-
 
 if __name__ == "__main__":
     create_test_data_scenario("./Test/data/")

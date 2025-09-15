@@ -5,8 +5,8 @@
 precip_data_directory: "./tests/Test/data/"
 lifting_index_data_directory: "./tests/Test/data/"
 file_suffix: ".nc_test"
-detection_output_path: "./tests/Test/output/detection"
-tracking_output_dir: "./tests/Test/output/tracking"
+detection_output_path: "./tests/Test/output1/detection"
+tracking_output_dir: "./tests/Test/output1/tracking"
 
 grid_size_km: 4.0
 precip_var_name: "pr"
@@ -28,13 +28,13 @@ min_nr_plumes: 1
 lifting_index_percentage_threshold: 0.2
 
 # Tracking parameters
-main_lifetime_thresh: 6
-main_area_thresh: 5000
+main_lifetime_thresh: 4
+main_area_thresh: 2000
 grid_cell_area_km2: 16
 nmaxmerge: 5
 
 # Other parameters
 use_lifting_index: True
-detection: False
+detection: True
 use_multiprocessing: True
 number_of_cores: 24
