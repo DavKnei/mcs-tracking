@@ -171,24 +171,30 @@ def track_mcs(
                 overlap_threshold=10,
             )
             temp_assigned = {}
-            all_current_labels = np.unique(final_labeled_regions[final_labeled_regions != 0])
-            labels_with_overlap = set(overlap_map.keys())
-            labels_no_overlap = [lbl for lbl in all_current_labels if lbl not in labels_with_overlap]
-
+            labels_no_overlap = [
+                lbl for lbl, old_ids in overlap_map.items() if not old_ids
+            ]
+ 
             if labels_no_overlap:
+                # We need a map of only the real overlaps to calculate the flow vector
+                clean_overlap_map = {
+                    lbl: ids for lbl, ids in overlap_map.items() if ids
+                }
                 rescued_overlaps = attempt_advection_rescue(
                     labels_no_overlap,
                     previous_labeled_regions,
                     final_labeled_regions,
                     previous_cluster_ids,
+                    clean_overlap_map, # Pass the clean map
                     grid_cell_area_km2,
+                    overlap_threshold=10,
                 )
+             
                 if rescued_overlaps:
+                    # Add the rescued overlaps back to the main map for processing
                     overlap_map.update(rescued_overlaps)
-                    # Update labels_no_overlap to remove the ones we just rescued
                     rescued_labels = set(rescued_overlaps.keys())
                     labels_no_overlap = [lbl for lbl in labels_no_overlap if lbl not in rescued_labels]
-
 
             for new_lbl, old_ids in overlap_map.items():
                 if len(old_ids) == 0:
@@ -311,7 +317,7 @@ def track_mcs(
                     break
             centers_this_timestep[str(tid)] = center_latlon
         tracking_centers_list.append(centers_this_timestep)
-
+    
     # ---- Final Filtering Step ----
     logger.info("Starting efficient final filtering of tracks...")
 
@@ -352,7 +358,6 @@ def track_mcs(
                 # If the track doesn't exist at this time, it fails the criteria
                 bool_series_combined.append(False)
 
-        # The logic from here is identical, but it runs on the efficiently-built series
         if compute_max_consecutive(bool_series_combined) >= main_lifetime_thresh:
             mcs_ids.append(tid)
 
@@ -360,8 +365,7 @@ def track_mcs(
         f"Tracking identified {len(mcs_ids)} main MCSs after combined filtering."
     )
 
-    # --- Generate the 3 Final Output Variables (This part is already efficient) ---
-
+    # --- Generate the 3 Final Output Variables ---
     # Output 3 (Most Inclusive): Full "Family Tree"
     mcs_id_merge_split = filter_relevant_systems(
         mcs_ids_list, mcs_ids, merging_events, splitting_events
@@ -377,13 +381,12 @@ def track_mcs(
         unique_ids_in_frame = np.unique(frame_in_phase[frame_in_phase > 0])
 
         for tid in unique_ids_in_frame:
-            # Use our pre-computed dictionary here as well for a small extra speedup
             props = track_properties_by_time.get(tid, {}).get(i)
             if not props or not (props["meets_area"] and props["meets_li"]):
                 frame_in_phase[frame_in_phase == tid] = 0
 
         robust_mcs_id.append(frame_in_phase)
-    # Final return statement
+
     return (
         robust_mcs_id,
         mcs_id,
