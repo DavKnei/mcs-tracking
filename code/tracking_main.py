@@ -217,7 +217,7 @@ def track_mcs(
                     temp_assigned[new_lbl] = chosen_id
                     if use_li:
                         current_mask = final_labeled_regions == new_lbl
-                        current_convective = np.all(li_regions[current_mask] == 1)
+                        current_convective = np.all(li_regions[current_mask] == 1)  # TODO: maybe change to any? Alot softer criteria
                     else:
                         current_convective = True
                     robust_flag_dict[chosen_id] = (
@@ -287,8 +287,12 @@ def track_mcs(
                         temp_assigned[nl] = finalid
                         # Re-evaluate the LI for the child region.
                         current_mask = final_labeled_regions == nl
-                        is_convective = np.all(li_regions[current_mask] == 1)
-                        robust_flag_dict[finalid] = is_convective
+                        if use_li:
+                            is_convective = np.all(li_regions[current_mask] == 1)
+                            robust_flag_dict[finalid] = is_convective
+                        else:
+                            # set all to true because we dont use the lifting index criteria
+                            robust_flag_dict[finalid] = True
                         logger.info(
                             f"Track splitting at {current_time} for parent track {old_id}. "
                             f"New child track {finalid} assigned robust flag: {robust_flag_dict[finalid]}"
