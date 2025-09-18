@@ -217,9 +217,9 @@ def track_mcs(
                     temp_assigned[new_lbl] = chosen_id
                     if use_li:
                         current_mask = final_labeled_regions == new_lbl
-                        current_convective = np.all(li_regions[current_mask] == 1)  # TODO: maybe change to any? Alot softer criteria
+                        current_convective = np.all(li_regions[current_mask] == 1) 
                     else:
-                        current_convective = True
+                        current_convective = True  # sets the criteria to True in case; Makes the later check robust
                     robust_flag_dict[chosen_id] = (
                         robust_flag_dict.get(chosen_id, False) or current_convective
                     )
@@ -351,19 +351,34 @@ def track_mcs(
     # Iterate through every track that ever existed
     for tid in list(lifetime_dict.keys()):
 
-        # Build the boolean series using fast dictionary lookups
-        bool_series_combined = []
+        # Build boolean series for area and LI criteria using fast dictionary lookups
+        bool_series_area = []
+        bool_series_li = []
+        
         for i in range(len(mcs_ids_list)):
             props = track_properties_by_time.get(tid, {}).get(i)
             if props:
                 # If the track exists at this time, check its stored properties
-                bool_series_combined.append(props["meets_area"] and props["meets_li"])
+                bool_series_area.append(props["meets_area"])
+                bool_series_li.append(props["meets_li"])
             else:
                 # If the track doesn't exist at this time, it fails the criteria
-                bool_series_combined.append(False)
+                bool_series_area.append(False)
+                bool_series_li.append(False)
 
-        if compute_max_consecutive(bool_series_combined) >= main_lifetime_thresh:
-            mcs_ids.append(tid)
+        # Condition 1: Check if the track has a mature phase (based on area) that meets the lifetime threshold.
+        if compute_max_consecutive(bool_series_area) >= main_lifetime_thresh:
+            
+            # If the first condition is met, we then check the LI condition.
+            # We create a list that is True only at timesteps where BOTH the area and LI criteria were met.
+            li_during_mature_phase_list = [
+                area and li for area, li in zip(bool_series_area, bool_series_li)
+            ]
+
+            # Condition 2: Check if the LI was met at least once during any part of the mature phase.
+            # If use_li_filter is False, 'bool_series_li' will be all True, so this check will always pass.
+            if any(li_during_mature_phase_list):
+                mcs_ids.append(tid)
 
     logger.info(
         f"Tracking identified {len(mcs_ids)} main MCSs after combined filtering."
