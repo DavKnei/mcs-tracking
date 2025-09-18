@@ -400,8 +400,10 @@ def track_mcs(
         unique_ids_in_frame = np.unique(frame_in_phase[frame_in_phase > 0])
 
         for tid in unique_ids_in_frame:
+            # A track is "in-phase" or "robust" at any timestep where it meets the area threshold.
+            # The check for the LI criterion has already been performed for the entire track's mature phase.
             props = track_properties_by_time.get(tid, {}).get(i)
-            if not props or not (props["meets_area"] and props["meets_li"]):
+            if not props or not props["meets_area"]:
                 frame_in_phase[frame_in_phase == tid] = 0
 
         robust_mcs_id.append(frame_in_phase)
